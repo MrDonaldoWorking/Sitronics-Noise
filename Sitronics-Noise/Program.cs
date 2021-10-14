@@ -73,6 +73,7 @@ namespace Sitronics_Noise
     {
         static Point Run(float time, Point p, Quaternion q)
         {
+            // TODO: Implement algorithm
             return null;
         }
 
