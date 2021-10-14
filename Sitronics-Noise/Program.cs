@@ -64,6 +64,7 @@ namespace Sitronics_Noise
             this.p = new Point(x, y, z);
             this.w = w;
         }
+
         private readonly Point p;
         private readonly float w;
     }
