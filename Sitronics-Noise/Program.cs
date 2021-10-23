@@ -87,5 +87,10 @@ namespace Sitronics_Noise
             Quaternion q = new Quaternion(qx, qy, qz, qw);
             return Run(time, p, q);
         }
+
+        static void Main()
+        {
+
+        }
     }
 }
