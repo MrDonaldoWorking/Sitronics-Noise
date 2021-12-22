@@ -71,6 +71,186 @@ public class Filter
         }
     }
 
+    private readonly struct SparseTableMin
+    {
+        private readonly ArrayList table;
+
+        public SparseTableMin(float[] arr)
+        {
+            int n = arr.Length;
+            int h = (int) Math.Log(n, 2);
+
+            table = new ArrayList();
+            table.Add(arr);
+
+            for (int i = 1; i <= h; ++i)
+            {
+                float[] prev = table[table.Count - 1] as float[];
+                float[] next = new float[prev.Length - (1 << i - 1)];
+                for (int j = 0; j < next.Length; ++j)
+                {
+                    next[j] = Math.Min(prev[j], prev[j + (1 << (i - 1))]);
+                }
+                table.Add(next);
+            }
+        }
+
+        public float Get(int left, int right)
+        {
+            int lg = (int) Math.Log(right - left, 2);
+            int len = 1 << lg;
+            float[] arr = table[lg] as float[];
+            return Math.Min(arr[left], arr[right - len]);
+        }
+    }
+
+    private readonly struct SparseTableMax
+    {
+        private readonly ArrayList table;
+
+        public SparseTableMax(float[] arr)
+        {
+            int n = arr.Length;
+            int h = (int) Math.Log(n, 2);
+
+            table = new ArrayList();
+            table.Add(arr);
+
+            for (int i = 1; i <= h; ++i)
+            {
+                float[] prev = table[table.Count - 1] as float[];
+                float[] next = new float[prev.Length - (1 << i - 1)];
+                for (int j = 0; j < next.Length; ++j)
+                {
+                    next[j] = Math.Max(prev[j], prev[j + (1 << (i - 1))]);
+                }
+                table.Add(next);
+            }
+        }
+
+        public float Get(int left, int right)
+        {
+            int lg = (int) Math.Log(right - left, 2);
+            int len = 1 << lg;
+            float[] arr = table[lg] as float[];
+            return Math.Max(arr[left], arr[right - len]);
+        }
+    }
+
+    private ArrayList ToVec3ArrayList(ArrayList arr)
+    {
+        ArrayList result = new ArrayList();
+        int len = (arr[0] as float[]).Length;
+        // string strvec = "";
+        for (int i = 0; i < len; ++i)
+        {
+            Vector3 vec = new Vector3(0f, 0f, 0f);
+            for (int q = 0; q < VEC3_N; ++q)
+            {
+                float[] cur = arr[q] as float[];
+                vec[q] = cur[i];
+            }
+            // strvec += vec + " ";
+            result.Add(vec);
+        }
+        // Debug.Log("res: " + strvec);
+
+        return result;
+    }
+
+    // https://en.wikipedia.org/wiki/Lulu_smoothing
+    // L operator of LULU filter
+    private ArrayList L(ArrayList vals, int n)
+    {
+        // string valstr = "";
+        // foreach (Vector3 vec in vals)
+        // {
+        //     valstr += vec + " ";
+        // }
+        // Debug.Log("L vals = " + valstr);
+        ArrayList seqs = new ArrayList();
+        for (int q = 0; q < VEC3_N; ++q)
+        {
+            float[] arr = new float[vals.Count];
+            for (int i = 0; i < vals.Count; ++i)
+            {
+                Vector3 curVec = (Vector3) vals[i];
+                arr[i] = curVec[q];
+            }
+
+            SparseTableMin st = new SparseTableMin(arr);
+            float[] mins = new float[vals.Count - n];
+            for (int i = 0; i + n < vals.Count; ++i)
+            {
+                mins[i] = st.Get(i, i + n);
+            }
+            // Debug.Log("mins: " + string.Join(", ", mins));
+            seqs.Add(mins);
+        }
+
+        ArrayList arrL = new ArrayList();
+        for (int q = 0; q < VEC3_N; ++q)
+        {
+            float[] mins = seqs[q] as float[];
+            SparseTableMax st = new SparseTableMax(mins);
+            float[] curL = new float[mins.Length - n];
+            for (int i = 0; i + n < mins.Length; ++i)
+            {
+                curL[i] = st.Get(i, i + n);
+            }
+            // Debug.Log("curL: " + string.Join(", ", curL));
+            arrL.Add(curL);
+        }
+
+        return ToVec3ArrayList(arrL);
+    }
+
+    // U operator of LULU filter
+    private ArrayList U(ArrayList vals, int n)
+    {
+        // string valstr = "";
+        // foreach (Vector3 vec in vals)
+        // {
+        //     valstr += vec + " ";
+        // }
+        // Debug.Log("U vals = " + valstr);
+        ArrayList seqs = new ArrayList();
+        for (int q = 0; q < VEC3_N; ++q)
+        {
+            float[] arr = new float[vals.Count];
+            for (int i = 0; i < vals.Count; ++i)
+            {
+                Vector3 curVec = (Vector3) vals[i];
+                arr[i] = curVec[q];
+            }
+            
+            SparseTableMax st = new SparseTableMax(arr);
+            float[] maxs = new float[vals.Count - n];
+            for (int i = 0; i + n < vals.Count; ++i)
+            {
+                maxs[i] = st.Get(i, i + n);
+            }
+            // Debug.Log("maxs: " + string.Join(", ", maxs));
+            seqs.Add(maxs);
+        }
+
+        ArrayList arrU = new ArrayList();
+        for (int q = 0; q < VEC3_N; ++q)
+        {
+            float[] maxs = seqs[q] as float[];
+            SparseTableMin st = new SparseTableMin(maxs);
+            float[] curU = new float[maxs.Length - n];
+            for (int i = 0; i + n < maxs.Length; ++i)
+            {
+                curU[i] = st.Get(i, i + n);
+            }
+            // Debug.Log("curU: " + string.Join(", ", curU));
+            arrU.Add(curU);
+        }
+
+        return ToVec3ArrayList(arrU);
+    }
+
     // ArrayList of Vector3
     // m = CONSID_ELEMS, - window size
     // k - iterations count
@@ -146,9 +326,9 @@ public class Filter
             posWindow.Add(vectorList[i]);
         }
 
-        Vector3 result = KolZur(posWindow, 3);
+        Vector3 filtered = KolZur(posWindow, 3);
 
-        return result;
+        return filtered;
     }
 
     public Quaternion FilterRotation(float time, Quaternion rotation, bool rotationChanged)
@@ -202,7 +382,8 @@ public class Filter
             fixedWindow.Add(next);
         }
 
-        Vector3 filtered = KolZur(fixedWindow, 3);
+        Vector3 filtered = (Vector3) U(L(fixedWindow, 1), 1)[3];
+        Debug.Log("before: " + (Vector3) fixedWindow[WAIT] + ", after: " + filtered);
         for (int q = 0; q < VEC3_N; ++q)
         {
             while (filtered[q] < 0)
