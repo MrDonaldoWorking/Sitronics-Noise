@@ -1,6 +1,8 @@
 using UnityEngine;
 using System;
 using System.Collections;
+using System.IO;
+using System.Threading.Tasks;
 
 public class Filter
 {
@@ -13,7 +15,7 @@ public class Filter
 
     private int cnt = 0;
 
-	private ArrayList vectorList;
+    private ArrayList vectorList;
     private ArrayList vectorTime;
     private Vector3 initPos;
 
@@ -24,14 +26,16 @@ public class Filter
 
     private ArrayList polyCoef;
 
+    private SingleExp seFilter;
+
     public void Init(Vector3 position, Quaternion rotation)
     {
         initPos = position;
         initRot = rotation;
-        
+
         CONSID_ELEMS = WAIT * 2 + 1;
 
-		vectorList = new ArrayList();
+        vectorList = new ArrayList();
         vectorTime = new ArrayList();
 
         quatList = new ArrayList();
@@ -39,6 +43,8 @@ public class Filter
         eulAnList = new ArrayList();
 
         CalcPolynomialCoef(CONSID_ELEMS);
+
+        seFilter = new SingleExp(initRot.eulerAngles, 0.7f);
     }
 
     // polynomial coefficient for (1 + x + x^2 + ... + x^(m-1))^k
@@ -78,7 +84,7 @@ public class Filter
         public SparseTableMin(float[] arr)
         {
             int n = arr.Length;
-            int h = (int) Math.Log(n, 2);
+            int h = (int)Math.Log(n, 2);
 
             table = new ArrayList();
             table.Add(arr);
@@ -97,7 +103,7 @@ public class Filter
 
         public float Get(int left, int right)
         {
-            int lg = (int) Math.Log(right - left, 2);
+            int lg = (int)Math.Log(right - left, 2);
             int len = 1 << lg;
             float[] arr = table[lg] as float[];
             return Math.Min(arr[left], arr[right - len]);
@@ -111,7 +117,7 @@ public class Filter
         public SparseTableMax(float[] arr)
         {
             int n = arr.Length;
-            int h = (int) Math.Log(n, 2);
+            int h = (int)Math.Log(n, 2);
 
             table = new ArrayList();
             table.Add(arr);
@@ -130,7 +136,7 @@ public class Filter
 
         public float Get(int left, int right)
         {
-            int lg = (int) Math.Log(right - left, 2);
+            int lg = (int)Math.Log(right - left, 2);
             int len = 1 << lg;
             float[] arr = table[lg] as float[];
             return Math.Max(arr[left], arr[right - len]);
@@ -174,7 +180,7 @@ public class Filter
             float[] arr = new float[vals.Count];
             for (int i = 0; i < vals.Count; ++i)
             {
-                Vector3 curVec = (Vector3) vals[i];
+                Vector3 curVec = (Vector3)vals[i];
                 arr[i] = curVec[q];
             }
 
@@ -220,10 +226,10 @@ public class Filter
             float[] arr = new float[vals.Count];
             for (int i = 0; i < vals.Count; ++i)
             {
-                Vector3 curVec = (Vector3) vals[i];
+                Vector3 curVec = (Vector3)vals[i];
                 arr[i] = curVec[q];
             }
-            
+
             SparseTableMax st = new SparseTableMax(arr);
             float[] maxs = new float[vals.Count - n];
             for (int i = 0; i + n < vals.Count; ++i)
@@ -251,6 +257,60 @@ public class Filter
         return ToVec3ArrayList(arrU);
     }
 
+    // https://en.wikipedia.org/wiki/Exponential_smoothing
+    private struct SingleExp
+    {
+        private Vector3 s;
+        private readonly float alpha;
+
+        public SingleExp(Vector3 init, float a)
+        {
+            s = init;
+            alpha = a;
+        }
+
+        public Vector3 GetNext(Vector3 measure)
+        {
+            s = alpha * measure + (1 - alpha) * s;
+            return s;
+        }
+    }
+
+    private struct DoubleExp
+    {
+        private Vector3 s;
+        private readonly float alpha;
+        private Vector3 b;
+        private readonly float beta;
+        private bool firstTime;
+
+        public DoubleExp(Vector3 init, float a, float b)
+        {
+            s = init;
+            this.b = init;
+            alpha = a;
+            beta = b;
+            firstTime = true;
+        }
+
+        public Vector3 GetNext(Vector3 measure)
+        {
+            if (firstTime)
+            {
+                firstTime = false;
+                // b0 = x1 - x0
+                b = measure - s;
+            }
+
+            Vector3 prevS = s;
+            Vector3 prevB = b;
+            s = alpha * measure + (1 - alpha) * (prevS + prevB);
+            b = beta * (s - prevS) + (1 - beta) * prevB;
+
+            return s;
+        }
+    }
+
     // ArrayList of Vector3
     // m = CONSID_ELEMS, - window size
     // k - iterations count
@@ -266,14 +326,14 @@ public class Filter
         {
             for (int s = k * -WAIT; s < k * WAIT; ++s)
             {
-                Vector3 val = (Vector3) vals[Math.Min(vals.Count - 1, Math.Max(0, t + s))];
+                Vector3 val = (Vector3)vals[Math.Min(vals.Count - 1, Math.Max(0, t + s))];
                 int[] coef = polyCoef[k] as int[];
-                float dividend = val[q] * (float) coef[s + k * WAIT];
+                float dividend = val[q] * (float)coef[s + k * WAIT];
                 // if (q == 0)
                 // {
                 //     calcstr += val[q] + " * " + coef[s + k * WAIT] + " / " + Math.Pow(m, k) + "; ";
                 // }
-                result[q] += (float) (dividend / Math.Pow(m, k));
+                result[q] += (float)(dividend / Math.Pow(m, k));
             }
         }
 
@@ -301,7 +361,7 @@ public class Filter
             float[] curCoord = new float[vals.Count];
             for (int i = 0; i < vals.Count; ++i)
             {
-                Vector3 val = (Vector3) vals[i];
+                Vector3 val = (Vector3)vals[i];
                 curCoord[i] = val[q];
             }
             Array.Sort(curCoord);
@@ -331,6 +391,22 @@ public class Filter
         return filtered;
     }
 
+    private void Log2File(Vector3 bfr, Vector3 aft)
+    {
+        for (int q = 0; q < VEC3_N; ++q)
+        {
+            using (StreamWriter before = new StreamWriter("before" + q, true))
+            {
+                before.Write(bfr[q] + " ");
+            }
+
+            using (StreamWriter after = new StreamWriter("after" + q, true))
+            {
+                after.Write(aft[q] + " ");
+            }
+        }
+    }
+
     public Quaternion FilterRotation(float time, Quaternion rotation, bool rotationChanged)
     {
         quatList.Add(rotation);
@@ -345,8 +421,8 @@ public class Filter
         fixedWindow.Add(eulAnList[eulAnList.Count - CONSID_ELEMS]);
         for (int i = eulAnList.Count - CONSID_ELEMS + 1; i < eulAnList.Count; ++i)
         {
-            Vector3 prev = (Vector3) fixedWindow[fixedWindow.Count - 1];
-            Vector3 linkToNext = (Vector3) eulAnList[i];
+            Vector3 prev = (Vector3)fixedWindow[fixedWindow.Count - 1];
+            Vector3 linkToNext = (Vector3)eulAnList[i];
             Vector3 next = new Vector3(linkToNext.x, linkToNext.y, linkToNext.z);
             for (int q = 0; q < VEC3_N; ++q)
             {
@@ -382,15 +458,17 @@ public class Filter
             fixedWindow.Add(next);
         }
 
-        Vector3 filtered = (Vector3) U(L(fixedWindow, 1), 1)[3];
-        Debug.Log("before: " + (Vector3) fixedWindow[WAIT] + ", after: " + filtered);
+        Vector3 filtered = seFilter.GetNext((Vector3)fixedWindow[WAIT]);
+        Debug.Log("before: " + (Vector3)fixedWindow[WAIT] + ", after: " + filtered);
+        Log2File((Vector3)fixedWindow[WAIT], filtered);
         for (int q = 0; q < VEC3_N; ++q)
         {
             while (filtered[q] < 0)
             {
                 filtered[q] += MAX_DEGREE;
             }
-            while (filtered[q] > MAX_DEGREE) {
+            while (filtered[q] > MAX_DEGREE)
+            {
                 filtered[q] -= MAX_DEGREE;
             }
         }
