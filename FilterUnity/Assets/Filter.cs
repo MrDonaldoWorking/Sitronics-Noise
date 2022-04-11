@@ -3,12 +3,13 @@ using System;
 using System.Collections;
 using System.IO;
 using System.Threading.Tasks;
+using System.Text;
 
 public class Filter
 {
     private int WAIT = 5;
     private int CONSID_ELEMS;
-    private int QUAT_N = 4;
+    // private int QUAT_N = 4;
     private int VEC3_N = 3;
     private int K = 10;
     private int MAX_DEGREE = 360;
@@ -45,6 +46,13 @@ public class Filter
         CalcPolynomialCoef(CONSID_ELEMS);
 
         seFilter = new SingleExp(initRot.eulerAngles, 0.7f);
+
+        // clear all debug outputs
+        for (int i = 0; i < VEC3_N; ++i)
+        {
+            File.WriteAllText("before" + i, string.Empty);
+            File.WriteAllText("after" + i, string.Empty);
+        }
     }
 
     // polynomial coefficient for (1 + x + x^2 + ... + x^(m-1))^k
@@ -380,12 +388,7 @@ public class Filter
             return initPos;
         }
 
-        ArrayList posWindow = new ArrayList();
-        for (int i = vectorList.Count - CONSID_ELEMS; i < vectorList.Count; ++i)
-        {
-            posWindow.Add(vectorList[i]);
-        }
-
+        ArrayList posWindow = vectorList.GetRange(vectorList.Count - CONSID_ELEMS, CONSID_ELEMS);
         Vector3 filtered = KolZur(posWindow, 3);
 
         return filtered;
@@ -407,6 +410,40 @@ public class Filter
         }
     }
 
+    private string ArrayV3ToString(ArrayList arr)
+    {
+        StringBuilder sb = new StringBuilder();
+        for (int q = 0; q < VEC3_N; ++q)
+        {
+            sb.AppendFormat("{0}: (", q);
+            for (int i = 0; i < arr.Count; ++i)
+            {
+                Vector3 curr = (Vector3)arr[i];
+                sb.Append(curr[q]);
+                sb.Append(' ');
+            }
+            sb.Append(")\n");
+        }
+        return sb.ToString();
+    }
+
+    private Vector3 normalize(Vector3 v)
+    {
+        Vector3 res = new Vector3(v.x, v.y, v.z);
+        for (int q = 0; q < VEC3_N; ++q)
+        {
+            while (res[q] < 0)
+            {
+                res[q] += MAX_DEGREE;
+            }
+            while (res[q] > MAX_DEGREE)
+            {
+                res[q] -= MAX_DEGREE;
+            }
+        }
+        return res;
+    }
+
     public Quaternion FilterRotation(float time, Quaternion rotation, bool rotationChanged)
     {
         quatList.Add(rotation);
@@ -419,6 +456,7 @@ public class Filter
 
         ArrayList fixedWindow = new ArrayList();
         fixedWindow.Add(eulAnList[eulAnList.Count - CONSID_ELEMS]);
+        // Debug.Log("bfr\n" + ArrayV3ToString(eulAnList.GetRange(eulAnList.Count - CONSID_ELEMS, CONSID_ELEMS)));
         for (int i = eulAnList.Count - CONSID_ELEMS + 1; i < eulAnList.Count; ++i)
         {
             Vector3 prev = (Vector3)fixedWindow[fixedWindow.Count - 1];
@@ -457,10 +495,11 @@ public class Filter
             }
             fixedWindow.Add(next);
         }
+        // Debug.Log("aft\n" + ArrayV3ToString(fixedWindow));
 
         Vector3 filtered = seFilter.GetNext((Vector3)fixedWindow[WAIT]);
-        Debug.Log("before: " + (Vector3)fixedWindow[WAIT] + ", after: " + filtered);
-        Log2File((Vector3)fixedWindow[WAIT], filtered);
+        // Debug.Log("before: " + (Vector3)fixedWindow[WAIT] + ", after: " + filtered);
+        // Log2File((Vector3)fixedWindow[WAIT], filtered);
         for (int q = 0; q < VEC3_N; ++q)
         {
             while (filtered[q] < 0)
@@ -474,6 +513,12 @@ public class Filter
         }
 
         // return medianRotation;
-        return Quaternion.Euler(filtered.x, filtered.y, filtered.z);
+        // return Quaternion.Euler(filtered.x, filtered.y, filtered.z);
+        Vector3 before = (Vector3)eulAnList[eulAnList.Count - WAIT - 1];
+        Vector3 angle = (Vector3)fixedWindow[WAIT];
+        Vector3 after = normalize(angle);
+        Debug.Log("before: " + before + ", after: " + angle + ", norm: " + after);
+        Log2File(before, angle);
+        return Quaternion.Euler(after.x, after.y, after.z);
     }
 }
