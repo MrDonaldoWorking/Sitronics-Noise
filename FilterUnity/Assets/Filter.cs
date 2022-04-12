@@ -11,8 +11,9 @@ public class Filter
     private int CONSID_ELEMS;
     // private int QUAT_N = 4;
     private int VEC3_N = 3;
+    private int ANGLE_N = 1;
     private int K = 10;
-    private int MAX_DEGREE = 360;
+    private float EPS = 1e-5f;
 
     private int cnt = 0;
 
@@ -22,7 +23,7 @@ public class Filter
 
     private ArrayList quatList;
     private ArrayList quatTime;
-    private ArrayList eulAnList;
+    private ArrayList angleList;
     private Quaternion initRot;
 
     private ArrayList polyCoef;
@@ -41,7 +42,7 @@ public class Filter
 
         quatList = new ArrayList();
         quatTime = new ArrayList();
-        eulAnList = new ArrayList();
+        angleList = new ArrayList();
 
         CalcPolynomialCoef(CONSID_ELEMS);
 
@@ -323,18 +324,18 @@ public class Filter
     // m = CONSID_ELEMS, - window size
     // k - iterations count
     // https://wires.onlinelibrary.wiley.com/doi/pdf/10.1002/wics.71
-    private Vector3 KolZur(ArrayList vals, int k)
+    private float[] KolZur(ArrayList vals, int k, int len)
     {
         // vals.Count = CONSID_ELEMS = 2 * WAIT + 1
         int t = WAIT;
         int m = CONSID_ELEMS;
-        Vector3 result = new Vector3(0f, 0f, 0f);
+        float[] result = new float[len];
         // string calcstr = "";
-        for (int q = 0; q < VEC3_N; ++q)
+        for (int q = 0; q < len; ++q)
         {
             for (int s = k * -WAIT; s < k * WAIT; ++s)
             {
-                Vector3 val = (Vector3)vals[Math.Min(vals.Count - 1, Math.Max(0, t + s))];
+                float[] val = vals[Math.Min(vals.Count - 1, Math.Max(0, t + s))] as float[];
                 int[] coef = polyCoef[k] as int[];
                 float dividend = val[q] * (float)coef[s + k * WAIT];
                 // if (q == 0)
@@ -379,9 +380,24 @@ public class Filter
         return new Vector3(coords[0][vals.Count / 2], coords[1][vals.Count / 2], coords[2][vals.Count / 2]);
     }
 
+    private float[] V3ToArr(Vector3 vector)
+    {
+        float[] values = new float[VEC3_N];
+        for (int q = 0; q < VEC3_N; ++q)
+        {
+            values[q] = vector[q];
+        }
+        return values;
+    }
+
+    private Vector3 ArrToV3(float[] arr)
+    {
+        return new Vector3(arr[0], arr[1], arr[2]);
+    }
+
     public Vector3 FilterPosition(float time, Vector3 position, bool positionChanged)
     {
-        vectorList.Add(position);
+        vectorList.Add(V3ToArr(position));
         vectorTime.Add(time);
         if (vectorList.Count < CONSID_ELEMS)
         {
@@ -389,9 +405,16 @@ public class Filter
         }
 
         ArrayList posWindow = vectorList.GetRange(vectorList.Count - CONSID_ELEMS, CONSID_ELEMS);
-        Vector3 filtered = KolZur(posWindow, 3);
+        string str = "(";
+        foreach (float[] arr in posWindow)
+        {
+            str += "[" + string.Join(",", arr) + "]" + " ";
+        }
+        // Debug.Log("Positions: " + str + ")");
+        float[] filtered = KolZur(posWindow, 3, VEC3_N);
+        // Debug.Log("Filtered position: " + ArrToV3(filtered));
 
-        return filtered;
+        return ArrToV3(filtered);
     }
 
     private void Log2File(Vector3 bfr, Vector3 aft)
@@ -410,115 +433,44 @@ public class Filter
         }
     }
 
-    private string ArrayV3ToString(ArrayList arr)
+    private Quaternion ExtrapolateRotation(Quaternion from, Quaternion to, float factor)
     {
-        StringBuilder sb = new StringBuilder();
-        for (int q = 0; q < VEC3_N; ++q)
+        Quaternion rot = to * Quaternion.Inverse(from); // rot is the rotation from from to to
+        float ang;
+        Vector3 axis;
+        rot.ToAngleAxis(out ang, out axis); // find axis-angle representation
+        if (ang > 180) // assume the shortest path
         {
-            sb.AppendFormat("{0}: (", q);
-            for (int i = 0; i < arr.Count; ++i)
-            {
-                Vector3 curr = (Vector3)arr[i];
-                sb.Append(curr[q]);
-                sb.Append(' ');
-            }
-            sb.Append(")\n");
+            ang -= 360;
         }
-        return sb.ToString();
-    }
-
-    private Vector3 normalize(Vector3 v)
-    {
-        Vector3 res = new Vector3(v.x, v.y, v.z);
-        for (int q = 0; q < VEC3_N; ++q)
-        {
-            while (res[q] < 0)
-            {
-                res[q] += MAX_DEGREE;
-            }
-            while (res[q] > MAX_DEGREE)
-            {
-                res[q] -= MAX_DEGREE;
-            }
-        }
-        return res;
+        ang = ang * factor % 360; // multiply angle by the factor
+        return Quaternion.AngleAxis(ang, axis) * from; // combine with first rotation
     }
 
     public Quaternion FilterRotation(float time, Quaternion rotation, bool rotationChanged)
     {
         quatList.Add(rotation);
-        eulAnList.Add(rotation.eulerAngles);
         quatTime.Add(time);
+        Quaternion prev = quatList.Count > 1 ? (Quaternion)quatList[quatList.Count - 2] : initRot;
+        float[] angleArr = new float[1];
+        angleArr[0] = (float)Quaternion.Angle(prev, rotation);
+        angleList.Add(angleArr);
         if (quatList.Count < CONSID_ELEMS)
         {
             return initRot;
         }
 
-        ArrayList fixedWindow = new ArrayList();
-        fixedWindow.Add(eulAnList[eulAnList.Count - CONSID_ELEMS]);
-        // Debug.Log("bfr\n" + ArrayV3ToString(eulAnList.GetRange(eulAnList.Count - CONSID_ELEMS, CONSID_ELEMS)));
-        for (int i = eulAnList.Count - CONSID_ELEMS + 1; i < eulAnList.Count; ++i)
+        ArrayList fixedWindow = angleList.GetRange(angleList.Count - CONSID_ELEMS, CONSID_ELEMS);
+        string str = "(";
+        foreach (float[] flt in fixedWindow)
         {
-            Vector3 prev = (Vector3)fixedWindow[fixedWindow.Count - 1];
-            Vector3 linkToNext = (Vector3)eulAnList[i];
-            Vector3 next = new Vector3(linkToNext.x, linkToNext.y, linkToNext.z);
-            for (int q = 0; q < VEC3_N; ++q)
-            {
-                // assume that in 1 sec object can rotate 10 degree
-                float diff = Math.Abs(next[q] - prev[q]);
-                // float degree = ((float) quatTime[i] - (float) quatTime[i - 1]) * DEGREE_PER_SEC;
-                float degree = 150;
-                if (degree > 0 && diff > degree)
-                {
-                    if (cnt < 1500)
-                    {
-                        ++cnt;
-                        // Debug.Log("N" + cnt + ") prevTime = " + quatTime[i - 1] + ", nextTime = " + quatTime[i]);
-                        // Debug.Log("N" + cnt + ") diff = " + diff + ", degree = " + degree + ", prev = " + prev + ", next = " + next + ", q = " + q);
-                    }
-                    // 0 -> 360
-                    if (prev[q] < next[q])
-                    {
-                        next[q] -= MAX_DEGREE;
-                    }
-                    // 360 -> 0
-                    else
-                    {
-                        next[q] += MAX_DEGREE;
-                    }
-
-                    if (cnt < 15)
-                    {
-                        // Debug.Log("N" + cnt + ") next = " + next);
-                    }
-                }
-            }
-            fixedWindow.Add(next);
+            str += string.Join(",", flt) + " ";
         }
-        // Debug.Log("aft\n" + ArrayV3ToString(fixedWindow));
-
-        Vector3 filtered = seFilter.GetNext((Vector3)fixedWindow[WAIT]);
-        // Debug.Log("before: " + (Vector3)fixedWindow[WAIT] + ", after: " + filtered);
-        // Log2File((Vector3)fixedWindow[WAIT], filtered);
-        for (int q = 0; q < VEC3_N; ++q)
-        {
-            while (filtered[q] < 0)
-            {
-                filtered[q] += MAX_DEGREE;
-            }
-            while (filtered[q] > MAX_DEGREE)
-            {
-                filtered[q] -= MAX_DEGREE;
-            }
-        }
-
-        // return medianRotation;
-        // return Quaternion.Euler(filtered.x, filtered.y, filtered.z);
-        Vector3 before = (Vector3)eulAnList[eulAnList.Count - WAIT - 1];
-        Vector3 angle = (Vector3)fixedWindow[WAIT];
-        Vector3 after = normalize(angle);
-        Debug.Log("before: " + before + ", after: " + angle + ", norm: " + after);
-        Log2File(before, angle);
-        return Quaternion.Euler(after.x, after.y, after.z);
+        // Debug.Log("Rotations: " + str + ")");
+        float filteredAngle = KolZur(fixedWindow, 3, ANGLE_N)[0];
+        float angle = (angleList[angleList.Count - 1] as float[])[0];
+        float factor = Math.Abs(angle) < EPS ? 0 : filteredAngle / angle;
+        Debug.Log("Res: " + filteredAngle + " / " + angle + " = " + factor);
+        return ExtrapolateRotation(prev, rotation, factor);
     }
 }
