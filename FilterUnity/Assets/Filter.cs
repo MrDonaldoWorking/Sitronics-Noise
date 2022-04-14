@@ -1,4 +1,5 @@
 using UnityEngine;
+
 using System;
 using System.Collections;
 using System.IO;
@@ -28,8 +29,6 @@ public class Filter
 
     private ArrayList polyCoef;
 
-    private SingleExp seFilter;
-
     public void Init(Vector3 position, Quaternion rotation)
     {
         initPos = position;
@@ -38,15 +37,15 @@ public class Filter
         CONSID_ELEMS = WAIT * 2 + 1;
 
         vectorList = new ArrayList();
+        vectorList.Add(V3ToArr(initPos));
         vectorTime = new ArrayList();
+        vectorTime.Add(0f);
 
         quatList = new ArrayList();
         quatTime = new ArrayList();
         angleList = new ArrayList();
 
         CalcPolynomialCoef(CONSID_ELEMS);
-
-        seFilter = new SingleExp(initRot.eulerAngles, 0.7f);
 
         // clear all debug outputs
         for (int i = 0; i < VEC3_N; ++i)
@@ -90,7 +89,7 @@ public class Filter
     {
         private readonly ArrayList table;
 
-        public SparseTableMin(float[] arr)
+        public SparseTableMin(ref float[] arr)
         {
             int n = arr.Length;
             int h = (int)Math.Log(n, 2);
@@ -123,7 +122,7 @@ public class Filter
     {
         private readonly ArrayList table;
 
-        public SparseTableMax(float[] arr)
+        public SparseTableMax(ref float[] arr)
         {
             int n = arr.Length;
             int h = (int)Math.Log(n, 2);
@@ -152,7 +151,80 @@ public class Filter
         }
     }
 
-    private ArrayList ToVec3ArrayList(ArrayList arr)
+    // Original Alpha-Beta-Gamma Filter
+    private readonly struct ABG // Assuming it's movement with changing accelaration
+    {
+        private static readonly int ARGS_N = 3;
+        private readonly float[] factors;
+        private readonly float[] currents;
+        private readonly float[] predictions;
+
+        public ABG(float a, float b, float c, ref float[] init)
+        {
+            factors = new float[ARGS_N];
+            currents = new float[ARGS_N];
+            predictions = new float[ARGS_N];
+            Init(a, b, c, ref init);
+        }
+
+        public ABG(ref float[] init)
+        {
+            factors = new float[ARGS_N];
+            currents = new float[ARGS_N];
+            predictions = new float[ARGS_N];
+            Init(0.5f, 0.4f, 0.1f, ref init);
+        }
+
+        private void Init(float a, float b, float c, ref float[] init)
+        {
+            factors[0] = a;
+            factors[1] = b;
+            factors[2] = c;
+            for (int i = 0; i < Math.Min(ARGS_N, init.Length); ++i)
+            {
+                currents[i] = init[i];
+            }
+        }
+
+        public void Update(float time, float position) // measure current position since time from previous Measure
+        {
+            Predict(time);
+            Estimate(time, position);
+        }
+
+        public void Update(float time) // If there is no measure
+        {
+            Predict(time);
+            Estimate(time, predictions[0]);
+        }
+
+        public float[] GetCurrent()
+        {
+            return currents;
+        }
+
+        public float[] GetPrediction()
+        {
+            return predictions;
+        }
+
+        private void Predict(float time)
+        {
+            predictions[0] = currents[0] + currents[1] * time + currents[2] * time * time / 2;
+            predictions[1] = currents[1] + currents[2] * time;
+            predictions[2] = currents[2];
+        }
+
+        private void Estimate(float time, float position)
+        {
+            float deviation = position - predictions[0];
+            currents[0] = predictions[0] + factors[0] * deviation;
+            currents[1] = predictions[1] + factors[1] * deviation / time;
+            currents[2] = predictions[2] + factors[2] * deviation / (0.5f * time * time);
+        }
+    }
+
+    private ArrayList ToVec3ArrayList(ref ArrayList arr)
     {
         ArrayList result = new ArrayList();
         int len = (arr[0] as float[]).Length;
@@ -175,7 +247,7 @@ public class Filter
 
     // https://en.wikipedia.org/wiki/Lulu_smoothing
     // L operator of LULU filter
-    private ArrayList L(ArrayList vals, int n)
+    private ArrayList L(ref ArrayList vals, int n)
     {
         // string valstr = "";
         // foreach (Vector3 vec in vals)
@@ -193,7 +265,7 @@ public class Filter
                 arr[i] = curVec[q];
             }
 
-            SparseTableMin st = new SparseTableMin(arr);
+            SparseTableMin st = new SparseTableMin(ref arr);
             float[] mins = new float[vals.Count - n];
             for (int i = 0; i + n < vals.Count; ++i)
             {
@@ -207,7 +279,7 @@ public class Filter
         for (int q = 0; q < VEC3_N; ++q)
         {
             float[] mins = seqs[q] as float[];
-            SparseTableMax st = new SparseTableMax(mins);
+            SparseTableMax st = new SparseTableMax(ref mins);
             float[] curL = new float[mins.Length - n];
             for (int i = 0; i + n < mins.Length; ++i)
             {
@@ -217,11 +289,11 @@ public class Filter
             arrL.Add(curL);
         }
 
-        return ToVec3ArrayList(arrL);
+        return ToVec3ArrayList(ref arrL);
     }
 
     // U operator of LULU filter
-    private ArrayList U(ArrayList vals, int n)
+    private ArrayList U(ref ArrayList vals, int n)
     {
         // string valstr = "";
         // foreach (Vector3 vec in vals)
@@ -239,7 +311,7 @@ public class Filter
                 arr[i] = curVec[q];
             }
 
-            SparseTableMax st = new SparseTableMax(arr);
+            SparseTableMax st = new SparseTableMax(ref arr);
             float[] maxs = new float[vals.Count - n];
             for (int i = 0; i + n < vals.Count; ++i)
             {
@@ -253,7 +325,7 @@ public class Filter
         for (int q = 0; q < VEC3_N; ++q)
         {
             float[] maxs = seqs[q] as float[];
-            SparseTableMin st = new SparseTableMin(maxs);
+            SparseTableMin st = new SparseTableMin(ref maxs);
             float[] curU = new float[maxs.Length - n];
             for (int i = 0; i + n < maxs.Length; ++i)
             {
@@ -263,7 +335,7 @@ public class Filter
             arrU.Add(curU);
         }
 
-        return ToVec3ArrayList(arrU);
+        return ToVec3ArrayList(ref arrU);
     }
 
     // https://en.wikipedia.org/wiki/Exponential_smoothing
@@ -272,13 +344,13 @@ public class Filter
         private Vector3 s;
         private readonly float alpha;
 
-        public SingleExp(Vector3 init, float a)
+        public SingleExp(ref Vector3 init, float a)
         {
             s = init;
             alpha = a;
         }
 
-        public Vector3 GetNext(Vector3 measure)
+        public Vector3 GetNext(ref Vector3 measure)
         {
             s = alpha * measure + (1 - alpha) * s;
             return s;
@@ -293,7 +365,7 @@ public class Filter
         private readonly float beta;
         private bool firstTime;
 
-        public DoubleExp(Vector3 init, float a, float b)
+        public DoubleExp(ref Vector3 init, float a, float b)
         {
             s = init;
             this.b = init;
@@ -302,7 +374,7 @@ public class Filter
             firstTime = true;
         }
 
-        public Vector3 GetNext(Vector3 measure)
+        public Vector3 GetNext(ref Vector3 measure)
         {
             if (firstTime)
             {
@@ -324,7 +396,7 @@ public class Filter
     // m = CONSID_ELEMS, - window size
     // k - iterations count
     // https://wires.onlinelibrary.wiley.com/doi/pdf/10.1002/wics.71
-    private float[] KolZur(ArrayList vals, int k, int len)
+    private float[] KolZur(ref ArrayList vals, int k, int len)
     {
         // vals.Count = CONSID_ELEMS = 2 * WAIT + 1
         int t = WAIT;
@@ -333,36 +405,20 @@ public class Filter
         // string calcstr = "";
         for (int q = 0; q < len; ++q)
         {
-            for (int s = k * -WAIT; s < k * WAIT; ++s)
+            for (int s = k * -WAIT; s <= k * WAIT; ++s)
             {
                 float[] val = vals[Math.Min(vals.Count - 1, Math.Max(0, t + s))] as float[];
                 int[] coef = polyCoef[k] as int[];
                 float dividend = val[q] * (float)coef[s + k * WAIT];
-                // if (q == 0)
-                // {
-                //     calcstr += val[q] + " * " + coef[s + k * WAIT] + " / " + Math.Pow(m, k) + "; ";
-                // }
                 result[q] += (float)(dividend / Math.Pow(m, k));
             }
         }
-
-        // string v3str = "vals = ";
-        // foreach (Vector3 val in vals)
-        // {
-        //     v3str += val.ToString();
-        //     v3str += " ";
-        // }
-
-        // Debug.Log(v3str);
-        // Debug.Log("was = " + vals[t]);
-        // Debug.Log("res = " + result);
-        // Debug.Log("calc: " + calcstr);
 
         return result;
     }
 
     // each element of ArrayList is Vector3 with floats
-    private Vector3 Median(ArrayList vals)
+    private Vector3 Median(ref ArrayList vals)
     {
         float[][] coords = new float[VEC3_N][];
         for (int q = 0; q < VEC3_N; ++q)
@@ -390,31 +446,104 @@ public class Filter
         return values;
     }
 
-    private Vector3 ArrToV3(float[] arr)
+    private Vector3 ArrToV3(ref float[] arr)
     {
         return new Vector3(arr[0], arr[1], arr[2]);
     }
 
+    private float[] PredictABG(ArrayList vals, ArrayList time, int len)
+    {
+        ArrayList ABGs = new ArrayList();
+        // init ABG
+        for (int q = 0; q < len; ++q)
+        {
+            float[] startPos = vals[0] as float[];
+            float[] init = { startPos[q] };
+            ABGs.Add(new ABG(ref init));
+        }
+        // Prepare ABG for prediction
+        for (int i = 1; i < vals.Count; ++i)
+        {
+            for (int q = 0; q < len; ++q)
+            {
+                ABG axis = (ABG)ABGs[q];
+                axis.Update((float)time[i] - (float)time[i - 1], (vals[i] as float[])[q]);
+            }
+        }
+        // Predict next value
+        float[] predict = new float[len];
+        for (int q = 0; q < len; ++q)
+        {
+            ABG axis = (ABG)ABGs[q];
+            predict[q] = axis.GetCurrent()[0];
+        }
+        return predict;
+    }
+
     public Vector3 FilterPosition(float time, Vector3 position, bool positionChanged)
     {
-        vectorList.Add(V3ToArr(position));
-        vectorTime.Add(time);
+        float prevTime = vectorTime.Count > 0 ? (float)vectorTime[vectorTime.Count - 1] : 0;
+        // Issue with sending multiple positions in one frame
+        // Why: Machine draws 15 frames in second, but someone set 60 fps
+        // Solve: delete previous data and proceed filtering
+        bool multipleFrames = Math.Abs(time - prevTime) < EPS;
+        if (multipleFrames)
+        {
+            vectorList[vectorList.Count - 1] = V3ToArr(position);
+            prevTime = vectorTime.Count > 2 ? (float)vectorTime[vectorTime.Count - 2] : 0;
+        }
+        else if (positionChanged)
+        {
+            vectorList.Add(V3ToArr(position));
+            vectorTime.Add(time);
+            // using (StreamWriter writer = new StreamWriter("Pos_ArrayList_vals", true))
+            // {
+            //     writer.Write($"{time.ToString("f7")}: {position.ToString("f7")}\t&\t");
+            // }
+        }
+        Debug.Log($"time: {prevTime} -> {time} = {time - prevTime}; positionChanged = {positionChanged}; position: {string.Join(",", vectorList[vectorList.Count - 2] as float[])} -> {position.ToString("f7")}");
+        // Lost connection
+        if (!positionChanged)
+        {
+            int startIndex = Math.Max(0, vectorList.Count - WAIT);
+            int elemsCnt = Math.Min(WAIT, vectorList.Count - startIndex);
+            // Debug.Log($"vectorList size = {vectorList.Count}, vectTime size = {vectorTime.Count}, GetRange({startIndex}, {elemsCnt})");
+            float[] predict = PredictABG(vectorList.GetRange(startIndex, elemsCnt), vectorTime.GetRange(startIndex, elemsCnt), VEC3_N);
+            // Debug.Log($"Predicted Pos = {string.Join(",", predict)}");
+            // if (!multipleFrames)
+            // {
+            //     using (StreamWriter writer = new StreamWriter("Pos_ArrayList_vals", true))
+            //     {
+            //         writer.Write($"{time.ToString("f7")}: ({string.Join(", ", predict)})\t!\t");
+            //     }
+            // }
+            vectorList.Add(predict);
+            vectorTime.Add(time);
+        }
         if (vectorList.Count < CONSID_ELEMS)
         {
+            // if (!multipleFrames)
+            // {
+            //     using (StreamWriter writer = new StreamWriter("Pos_ArrayList_vals", true))
+            //     {
+            //         writer.WriteLine($"{initPos.ToString("f7")}");
+            //     }
+            // }
             return initPos;
         }
 
         ArrayList posWindow = vectorList.GetRange(vectorList.Count - CONSID_ELEMS, CONSID_ELEMS);
-        string str = "(";
-        foreach (float[] arr in posWindow)
-        {
-            str += "[" + string.Join(",", arr) + "]" + " ";
-        }
-        // Debug.Log("Positions: " + str + ")");
-        float[] filtered = KolZur(posWindow, 3, VEC3_N);
+        float[] filtered = KolZur(ref posWindow, 2, VEC3_N);
         // Debug.Log("Filtered position: " + ArrToV3(filtered));
+        // if (!multipleFrames)
+        // {
+        //     using (StreamWriter writer = new StreamWriter("Pos_ArrayList_vals", true))
+        //     {
+        //         writer.WriteLine($"({string.Join(", ", filtered)})");
+        //     }
+        // }
 
-        return ArrToV3(filtered);
+        return ArrToV3(ref filtered);
     }
 
     private void Log2File(Vector3 bfr, Vector3 aft)
@@ -467,10 +596,10 @@ public class Filter
             str += string.Join(",", flt) + " ";
         }
         // Debug.Log("Rotations: " + str + ")");
-        float filteredAngle = KolZur(fixedWindow, 3, ANGLE_N)[0];
+        float filteredAngle = KolZur(ref fixedWindow, 3, ANGLE_N)[0];
         float angle = (angleList[angleList.Count - 1] as float[])[0];
         float factor = Math.Abs(angle) < EPS ? 0 : filteredAngle / angle;
-        Debug.Log("Res: " + filteredAngle + " / " + angle + " = " + factor);
+        // Debug.Log("Res: " + filteredAngle + " / " + angle + " = " + factor);
         return ExtrapolateRotation(prev, rotation, factor);
     }
 }
