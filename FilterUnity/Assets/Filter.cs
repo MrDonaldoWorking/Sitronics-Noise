@@ -18,8 +18,9 @@ public class Filter
 
     private int cnt = 0;
 
-    private ArrayList vectorList;
-    private ArrayList vectorTime;
+    private ArrayList rawPositions;
+    private ArrayList times;
+    private ArrayList filPositions;
     private Vector3 initPos;
 
     private ArrayList quatList;
@@ -36,10 +37,11 @@ public class Filter
 
         CONSID_ELEMS = WAIT * 2 + 1;
 
-        vectorList = new ArrayList();
-        vectorList.Add(V3ToArr(initPos));
-        vectorTime = new ArrayList();
-        vectorTime.Add(0f);
+        rawPositions = new ArrayList();
+        rawPositions.Add(V3ToArr(initPos));
+        times = new ArrayList();
+        times.Add(0f);
+        filPositions = new ArrayList();
 
         quatList = new ArrayList();
         quatTime = new ArrayList();
@@ -482,33 +484,33 @@ public class Filter
 
     public Vector3 FilterPosition(float time, Vector3 position, bool positionChanged)
     {
-        float prevTime = vectorTime.Count > 0 ? (float)vectorTime[vectorTime.Count - 1] : 0;
+        float prevTime = times.Count > 0 ? (float)times[times.Count - 1] : 0;
         // Issue with sending multiple positions in one frame
         // Why: Machine draws 15 frames in second, but someone set 60 fps
         // Solve: delete previous data and proceed filtering
         bool multipleFrames = Math.Abs(time - prevTime) < EPS;
         if (multipleFrames)
         {
-            vectorList[vectorList.Count - 1] = V3ToArr(position);
-            prevTime = vectorTime.Count > 2 ? (float)vectorTime[vectorTime.Count - 2] : 0;
+            rawPositions[rawPositions.Count - 1] = V3ToArr(position);
+            prevTime = times.Count > 2 ? (float)times[times.Count - 2] : 0;
         }
         else if (positionChanged)
         {
-            vectorList.Add(V3ToArr(position));
-            vectorTime.Add(time);
+            rawPositions.Add(V3ToArr(position));
+            times.Add(time);
             // using (StreamWriter writer = new StreamWriter("Pos_ArrayList_vals", true))
             // {
             //     writer.Write($"{time.ToString("f7")}: {position.ToString("f7")}\t&\t");
             // }
         }
-        Debug.Log($"time: {prevTime} -> {time} = {time - prevTime}; positionChanged = {positionChanged}; position: {string.Join(",", vectorList[vectorList.Count - 2] as float[])} -> {position.ToString("f7")}");
+        Debug.Log($"time: {prevTime} -> {time} = {time - prevTime}; positionChanged = {positionChanged}; position: {string.Join(",", rawPositions[rawPositions.Count - 2] as float[])} -> {position.ToString("f7")}");
         // Lost connection
         if (!positionChanged)
         {
-            int startIndex = Math.Max(0, vectorList.Count - WAIT);
-            int elemsCnt = Math.Min(WAIT, vectorList.Count - startIndex);
+            int startIndex = Math.Max(0, filPositions.Count - WAIT);
+            int elemsCnt = Math.Min(WAIT, filPositions.Count - startIndex);
             // Debug.Log($"vectorList size = {vectorList.Count}, vectTime size = {vectorTime.Count}, GetRange({startIndex}, {elemsCnt})");
-            float[] predict = PredictABG(vectorList.GetRange(startIndex, elemsCnt), vectorTime.GetRange(startIndex, elemsCnt), VEC3_N);
+            float[] predict = PredictABG(filPositions.GetRange(startIndex, elemsCnt), times.GetRange(startIndex, elemsCnt), VEC3_N);
             // Debug.Log($"Predicted Pos = {string.Join(",", predict)}");
             // if (!multipleFrames)
             // {
@@ -517,10 +519,10 @@ public class Filter
             //         writer.Write($"{time.ToString("f7")}: ({string.Join(", ", predict)})\t!\t");
             //     }
             // }
-            vectorList.Add(predict);
-            vectorTime.Add(time);
+            rawPositions.Add(predict);
+            times.Add(time);
         }
-        if (vectorList.Count < CONSID_ELEMS)
+        if (rawPositions.Count < CONSID_ELEMS)
         {
             // if (!multipleFrames)
             // {
@@ -532,8 +534,9 @@ public class Filter
             return initPos;
         }
 
-        ArrayList posWindow = vectorList.GetRange(vectorList.Count - CONSID_ELEMS, CONSID_ELEMS);
+        ArrayList posWindow = rawPositions.GetRange(rawPositions.Count - CONSID_ELEMS, CONSID_ELEMS);
         float[] filtered = KolZur(ref posWindow, 2, VEC3_N);
+        filPositions.Add(filtered);
         // Debug.Log("Filtered position: " + ArrToV3(filtered));
         // if (!multipleFrames)
         // {
