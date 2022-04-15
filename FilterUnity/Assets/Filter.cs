@@ -469,23 +469,6 @@ public class Filter
 
     private float[] PredictABG(ArrayList vals, ArrayList time, int len)
     {
-        Debug.Log($"PredictABG len = {len}");
-        // Debug.Log("vals:");
-        // for (int i = 0; i < vals.Count; ++i)
-        // {
-        //     float[] el = vals[i] as float[];
-        //     float t = (float)time[i];
-        //     string curr = t.ToString("f4") + ": ";
-        //     if (el == null)
-        //     {
-        //         curr += "null";
-        //     }
-        //     else
-        //     {
-        //         curr += string.Join(", ", el);
-        //     }
-        //     Debug.Log(curr);
-        // }
         ArrayList ABGs = new ArrayList();
         // init ABG
         for (int q = 0; q < len; ++q)
@@ -495,12 +478,6 @@ public class Filter
             ABGs.Add(new ABG(ref init));
         }
         // Prepare ABG for prediction
-        string str = "vals: ";
-        for (int i = 0; i < vals.Count; ++i)
-        {
-            str += $"({string.Join(", ", vals[i] as float[])})";
-        }
-        Debug.Log(str);
         for (int i = 1; i < vals.Count; ++i)
         {
             for (int q = 0; q < len; ++q)
@@ -580,7 +557,9 @@ public class Filter
             // }
             filPositions.Add(predict);
             filPosTime.Add(time);
-            return ArrToV3(ref predict);
+            // WAIT lag
+            float[] laggedPos = filPositions[filPositions.Count - WAIT] as float[];
+            return ArrToV3(ref laggedPos);
         }
 
         ArrayList posWindow = rawPositions.GetRange(rawPositions.Count - CONSID_ELEMS, CONSID_ELEMS);
@@ -689,7 +668,7 @@ public class Filter
             int startIndex = Math.Max(0, filAngles.Count - WAIT);
             int elemsCnt = Math.Min(WAIT, filAngles.Count - startIndex);
             // Neighbour differences are less in 1 than all values
-            Debug.Log($"filAngles size = {filAngles.Count}, filQuatTime size = {filQuatTime.Count}, filAngles.GetRange({startIndex}, {elemsCnt})");
+            // Debug.Log($"filAngles size = {filAngles.Count}, filQuatTime size = {filQuatTime.Count}, filAngles.GetRange({startIndex}, {elemsCnt})");
             float[] predict = PredictABG(filAngles.GetRange(startIndex, elemsCnt), filQuatTime.GetRange(startIndex + 1, elemsCnt), ANGLE_N);
             // Debug.Log($"Predicted Pos = {string.Join(",", predict)}");
             float predictedAngle = predict[0];
@@ -697,13 +676,15 @@ public class Filter
             Quaternion filPrev2 = (Quaternion)filQuats[filQuats.Count - 2];
             Quaternion filPrev = (Quaternion)filQuats[filQuats.Count - 1];
             float prevAngle = (filAngles[filAngles.Count - 1] as float[])[0];
+            // predictedAngle = prevAngle * (time - (float)filQuatTime[filQuatTime.Count - 1]) / ((float)filQuatTime[filQuatTime.Count - 1] - (float)filQuatTime[filQuatTime.Count - 2]);
             float predictFactor = Math.Abs(prevAngle) < EPS ? 1 : (prevAngle + predictedAngle) / prevAngle;
             Quaternion predictQuat = ExtrapolateRotation(filPrev2, filPrev, predictFactor);
-            Debug.Log($"angle: {predictedAngle}, {prevAngle} = {predictFactor}; quats: {filPrev2.ToString("f5")} -> {filPrev.ToString("f5")} -> {predictQuat.ToString("f5")}");
+            // Debug.Log($"angle: {predictedAngle}, {prevAngle} = {predictFactor}; quats: {filPrev2.ToString("f5")} -> {filPrev.ToString("f5")} -> {predictQuat.ToString("f5")}");
             filQuats.Add(predictQuat);
             filAngles.Add(predict);
             filQuatTime.Add(time);
-            return predictQuat;
+            // WAIT lag
+            return (Quaternion)filQuats[filQuats.Count - WAIT];
         }
 
         ArrayList fixedWindow = rawAngles.GetRange(rawAngles.Count - CONSID_ELEMS, CONSID_ELEMS);
