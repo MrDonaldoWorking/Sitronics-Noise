@@ -469,6 +469,23 @@ public class Filter
 
     private float[] PredictABG(ArrayList vals, ArrayList time, int len)
     {
+        Debug.Log($"PredictABG len = {len}");
+        // Debug.Log("vals:");
+        // for (int i = 0; i < vals.Count; ++i)
+        // {
+        //     float[] el = vals[i] as float[];
+        //     float t = (float)time[i];
+        //     string curr = t.ToString("f4") + ": ";
+        //     if (el == null)
+        //     {
+        //         curr += "null";
+        //     }
+        //     else
+        //     {
+        //         curr += string.Join(", ", el);
+        //     }
+        //     Debug.Log(curr);
+        // }
         ArrayList ABGs = new ArrayList();
         // init ABG
         for (int q = 0; q < len; ++q)
@@ -704,7 +721,7 @@ public class Filter
         else
         {
             filQuats[filQuats.Count - 1] = result;
-            filAngles[filAngles.Count - 1] = result;
+            filAngles[filAngles.Count - 1] = QuatsToAngle(prev, result);
             // time is identical to last element in ArrayList
         }
         return result;
