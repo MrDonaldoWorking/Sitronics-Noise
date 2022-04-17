@@ -496,6 +496,41 @@ public class Filter
         return predict;
     }
 
+    // b - kernel width
+    private float[] GaussianKernel(ref ArrayList vals, ref ArrayList time, float b, int len)
+    {
+        float midTime = time[time.Count / 2];
+        float[] kernel = new float[vals.Count];
+        float sum = 0;
+        for (int i = 0; i < vals.Count; ++i)
+        {
+            kernel[i] = Math.Exp(-(Math.Pow((float)time[i] - midTime), 2) / (2 * b * b));
+            sum += kernel[i];
+        }
+        for (int i = 0; i < vals.Count; ++i)
+        {
+            kernel[i] /= sum;
+        }
+        float[] result = new float[len];
+        for (int q = 0; q < len; ++q)
+        {
+            float val = 0;
+            for (int i = 0; i < vals.Count; ++i)
+            {
+                float[] valArr = vals[i] as float[];
+                val += valArr[q] * kernel[i];
+            }
+            result[q] = val;
+        }
+        return result;
+    }
+
+    private float[] GaussianKernel(ArrayList vals, ArrayList time, int neighbours, int len)
+    {
+
+    }
+
+
     public Vector3 FilterPosition(float time, Vector3 position, bool positionChanged)
     {
         float rawPrevTime = (float)rawPosTime[rawPosTime.Count - 1];
@@ -684,7 +719,7 @@ public class Filter
             filAngles.Add(predict);
             filQuatTime.Add(time);
             // WAIT lag
-            return (Quaternion)filQuats[filQuats.Count - WAIT];
+            // return (Quaternion)filQuats[filQuats.Count - WAIT];
         }
 
         ArrayList fixedWindow = rawAngles.GetRange(rawAngles.Count - CONSID_ELEMS, CONSID_ELEMS);
