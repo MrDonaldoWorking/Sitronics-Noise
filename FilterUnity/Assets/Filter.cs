@@ -496,15 +496,15 @@ public class Filter
         return predict;
     }
 
-    // b - kernel width
+    // b - kernel width, len - Vector3 or Quaternion
     private float[] GaussianKernel(ref ArrayList vals, ref ArrayList time, float b, int len)
     {
-        float midTime = time[time.Count / 2];
+        float midTime = (float)time[time.Count / 2];
         float[] kernel = new float[vals.Count];
         float sum = 0;
         for (int i = 0; i < vals.Count; ++i)
         {
-            kernel[i] = Math.Exp(-(Math.Pow((float)time[i] - midTime), 2) / (2 * b * b));
+            kernel[i] = (float)Math.Exp(-(Math.Pow((float)time[i] - midTime, 2)) / (2 * b * b));
             sum += kernel[i];
         }
         for (int i = 0; i < vals.Count; ++i)
@@ -524,12 +524,6 @@ public class Filter
         }
         return result;
     }
-
-    private float[] GaussianKernel(ArrayList vals, ArrayList time, int neighbours, int len)
-    {
-
-    }
-
 
     public Vector3 FilterPosition(float time, Vector3 position, bool positionChanged)
     {

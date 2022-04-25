@@ -11,10 +11,10 @@ public class NoiseGenerator
 
     public float Noise()
     {
-        float value = machine.NextDouble() * sf;
+        float value = (float)machine.NextDouble() * sf;
         if (machine.Next(50) == 0)
         {
-            value += machine.NextDouble() * rf;
+            value += (float)machine.NextDouble() * rf;
         }
         return value;
     }

@@ -1,6 +1,10 @@
 using System.Collections.Generic;
+using System.Collections;
 using System.Globalization;
 using System.Linq;
+using System.IO;
+using System.Diagnostics;
+using System;
 using UnityEngine;
 
 public class CameraMovementRepeater : MonoBehaviour
@@ -13,6 +17,15 @@ public class CameraMovementRepeater : MonoBehaviour
 
     private float _currentPlayedTime = 0f;
     private int _lastSentFrame = -1;
+
+    private NoiseGenerator genVec;
+    private NoiseGenerator genQuat;
+
+    private ArrayList vecTime;
+    private ArrayList quatTime;
+    private ArrayList vecDist;
+    private ArrayList quatDist;
+    private bool compared;
 
     void Start()
     {
@@ -32,6 +45,15 @@ public class CameraMovementRepeater : MonoBehaviour
 
         _filter = new Filter();
         _filter.Init(transform.position, transform.rotation);
+
+        genVec = new NoiseGenerator(0.01f, 0f);
+        genQuat = new NoiseGenerator(0.01f, 0f);
+
+        vecTime = new ArrayList();
+        quatTime = new ArrayList();
+        vecDist = new ArrayList();
+        quatDist = new ArrayList();
+        compared = false;
     }
 
     private float ParseData(string s)
@@ -41,15 +63,98 @@ public class CameraMovementRepeater : MonoBehaviour
         return float.Parse(filteredData, CultureInfo.InvariantCulture);
     }
 
+    private Vector3 NoiseVec3(Vector3 vec)
+    {
+        Vector3 res = new Vector3(vec.x, vec.y, vec.z);
+        for (int i = 0; i < 3; ++i)
+        {
+            res[i] += genVec.Noise();
+        }
+        return res;
+    }
+
+    private Quaternion NoiseQuat(Quaternion quat)
+    {
+        Quaternion res = new Quaternion(quat.x, quat.y, quat.z, quat.w);
+        for (int i = 0; i < 4; ++i)
+        {
+            res[i] += genQuat.Noise();
+        }
+        return res;
+    }
+
+    private float DistVec3(Vector3 a, Vector3 b)
+    {
+        float ans = 0;
+        for (int i = 0; i < 3; ++i)
+        {
+            ans += (float)Math.Pow(a[i] - b[i], 2);
+        }
+        return (float)Math.Pow(ans, 0.5);
+    }
+
+    private float DistQuat(Quaternion a, Quaternion b)
+    {
+        Vector3 forwardA = a * Vector3.forward;
+        Vector3 forwardB = b * Vector3.forward;
+        return Vector3.Angle(forwardA, forwardB);
+    }
+
+    private void WriteArrayListFloat(StreamWriter writer, ArrayList times)
+    {
+        float sum = 0, maxTime = 0;
+        foreach (float time in times)
+        {
+            sum += time;
+            maxTime = Math.Max(maxTime, time);
+            writer.WriteLine(time);
+        }
+        writer.WriteLine($"mean: {sum / times.Count}");
+        writer.WriteLine($"max: {maxTime}");
+    }
+
     void Update()
     {
+        if (_lastSentFrame >= _recordedData.Count)
+        {
+            if (compared)
+            {
+                return;
+            }
+            using (StreamWriter writer = new StreamWriter("vecTime", true))
+            {
+                WriteArrayListFloat(writer, vecTime);
+            }
+            using (StreamWriter writer = new StreamWriter("quatTime", true))
+            {
+                WriteArrayListFloat(writer, quatTime);
+            }
+            using (StreamWriter writer = new StreamWriter("vecDist", true))
+            {
+                WriteArrayListFloat(writer, vecDist);
+            }
+            using (StreamWriter writer = new StreamWriter("quatDist", true))
+            {
+                WriteArrayListFloat(writer, quatDist);
+            }
+            compared = true;
+            return;
+        }
+
         _currentPlayedTime += Time.deltaTime;
 
         var currentFrame = (int)(_currentPlayedTime * SpeedFramesPerSecond);
         if (currentFrame == _lastSentFrame)
         {
+            // Stopwatch timer = Stopwatch.StartNew();
             transform.position = _filter.FilterPosition(_currentPlayedTime, transform.position, false);
+            // timer.Stop();
+            // long posMillis = timer.ElapsedMillis;
+
+            // timer = Stopwatch.StartNew();
             transform.rotation = _filter.FilterRotation(_currentPlayedTime, transform.rotation, false);
+            // timer.Stop();
+            // long rotMillis = timer.ElapsedMillis;
             return;
         }
 
@@ -57,8 +162,23 @@ public class CameraMovementRepeater : MonoBehaviour
         {
             _lastSentFrame++;
 
-            transform.position = _filter.FilterPosition(_currentPlayedTime, _recordedData[_lastSentFrame % _recordedData.Count].Position, true);
-            transform.rotation = _filter.FilterRotation(_currentPlayedTime, _recordedData[_lastSentFrame % _recordedData.Count].Rotation, true);
+            Vector3 vecB = _recordedData[_lastSentFrame % _recordedData.Count].Position;
+            Vector3 vecN = NoiseVec3(vecB);
+            Stopwatch timer = Stopwatch.StartNew();
+            transform.position = _filter.FilterPosition(_currentPlayedTime, vecN, true);
+            timer.Stop();
+            vecTime.Add(timer.Elapsed.Milliseconds / 1000f);
+            Vector3 vecA = transform.position;
+            vecDist.Add(DistVec3(vecA, vecB));
+
+            Quaternion quatB = _recordedData[_lastSentFrame % _recordedData.Count].Rotation;
+            Quaternion quatN = NoiseQuat(quatB);
+            timer = Stopwatch.StartNew();
+            transform.rotation = _filter.FilterRotation(_currentPlayedTime, quatN, true);
+            timer.Stop();
+            quatTime.Add(timer.Elapsed.Milliseconds / 1000f);
+            Quaternion quatA = transform.rotation;
+            quatDist.Add(DistQuat(quatA, quatB));
         }
     }
 }
