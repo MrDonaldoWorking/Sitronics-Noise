@@ -496,11 +496,10 @@ public class Filter
         return predict;
     }
 
-    // b - kernel width, len - Vector3 or Quaternion
-    private float[] GaussianKernel(ref ArrayList vals, ref ArrayList time, float b, int len)
+    private ref float[] GaussianKernel(ref ArrayList time, int b)
     {
         float midTime = (float)time[time.Count / 2];
-        float[] kernel = new float[vals.Count];
+        float[] kernel = new float[time.Count];
         float sum = 0;
         for (int i = 0; i < vals.Count; ++i)
         {
@@ -511,6 +510,13 @@ public class Filter
         {
             kernel[i] /= sum;
         }
+        return ref kernel;
+    }
+
+    // b - kernel width, len - Vector3 or Quaternion
+    private float[] GaussianKernelSmoothing(ref ArrayList vals, ref ArrayList time, float b, int len)
+    {
+        float[] kernel = ref GaussianKernel(ref time, b);
         float[] result = new float[len];
         for (int q = 0; q < len; ++q)
         {

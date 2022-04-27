@@ -46,8 +46,8 @@ public class CameraMovementRepeater : MonoBehaviour
         _filter = new Filter();
         _filter.Init(transform.position, transform.rotation);
 
-        genVec = new NoiseGenerator(0.01f, 0f);
-        genQuat = new NoiseGenerator(0.01f, 0f);
+        genVec = new NoiseGenerator(0f, 0f);
+        genQuat = new NoiseGenerator(0f, 0f);
 
         vecTime = new ArrayList();
         quatTime = new ArrayList();
@@ -102,6 +102,7 @@ public class CameraMovementRepeater : MonoBehaviour
 
     private void WriteArrayListFloat(StreamWriter writer, ArrayList times)
     {
+        times.RemoveAt(times.Count - 1);
         float sum = 0, maxTime = 0;
         foreach (float time in times)
         {
