@@ -100,18 +100,21 @@ public class CameraMovementRepeater : MonoBehaviour
         return Vector3.Angle(forwardA, forwardB);
     }
 
-    private void WriteArrayListFloat(StreamWriter writer, ArrayList times)
+    private void WriteArrayListFloat(ArrayList times, string fileName)
     {
-        times.RemoveAt(times.Count - 1);
-        float sum = 0, maxTime = 0;
-        foreach (float time in times)
+        using (StreamWriter writer = new StreamWriter(fileName))
         {
-            sum += time;
-            maxTime = Math.Max(maxTime, time);
-            writer.WriteLine(time);
+            times.RemoveAt(times.Count - 1);
+            float sum = 0, maxTime = 0;
+            foreach (float time in times)
+            {
+                sum += time;
+                maxTime = Math.Max(maxTime, time);
+                writer.WriteLine(time);
+            }
+            writer.WriteLine($"mean: {sum / times.Count}");
+            writer.WriteLine($"max: {maxTime}");
         }
-        writer.WriteLine($"mean: {sum / times.Count}");
-        writer.WriteLine($"max: {maxTime}");
     }
 
     void Update()
@@ -122,22 +125,10 @@ public class CameraMovementRepeater : MonoBehaviour
             {
                 return;
             }
-            using (StreamWriter writer = new StreamWriter("vecTime", true))
-            {
-                WriteArrayListFloat(writer, vecTime);
-            }
-            using (StreamWriter writer = new StreamWriter("quatTime", true))
-            {
-                WriteArrayListFloat(writer, quatTime);
-            }
-            using (StreamWriter writer = new StreamWriter("vecDist", true))
-            {
-                WriteArrayListFloat(writer, vecDist);
-            }
-            using (StreamWriter writer = new StreamWriter("quatDist", true))
-            {
-                WriteArrayListFloat(writer, quatDist);
-            }
+            WriteArrayListFloat(vecTime, "vecTime");
+            WriteArrayListFloat(quatTime, "quatTime");
+            WriteArrayListFloat(vecDist, "vecDist");
+            WriteArrayListFloat(quatDist, "quatDist");
             compared = true;
             return;
         }
