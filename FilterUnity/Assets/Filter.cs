@@ -127,41 +127,6 @@ public class Filter
         return predict;
     }
 
-    // Calculates Gaussian Kernel assuming max value is in middle
-    private void GaussianKernel(ref ArrayList time, float b, ref float[] kernel)
-    {
-        float midTime = (float)time[time.Count / 2];
-        float sum = 0;
-        for (int i = 0; i < time.Count; ++i)
-        {
-            kernel[i] = (float)Math.Exp(-(Math.Pow((float)time[i] - midTime, 2)) / (2 * b * b));
-            sum += kernel[i];
-        }
-        for (int i = 0; i < time.Count; ++i)
-        {
-            kernel[i] /= sum;
-        }
-    }
-
-    // b - kernel width, len - Vector3 or Quaternion
-    private float[] GaussianKernelSmoothing(ref ArrayList vals, ref ArrayList time, float b, int len)
-    {
-        float[] kernel = new float[vals.Count];
-        GaussianKernel(ref time, b, ref kernel);
-        float[] result = new float[len];
-        for (int q = 0; q < len; ++q)
-        {
-            float val = 0;
-            for (int i = 0; i < vals.Count; ++i)
-            {
-                float[] valArr = vals[i] as float[];
-                val += valArr[q] * kernel[i];
-            }
-            result[q] = val;
-        }
-        return result;
-    }
-
     public Vector3 FilterPosition(float time, Vector3 position, bool positionChanged)
     {
         float rawPrevTime = (float)rawPosTime[rawPosTime.Count - 1];

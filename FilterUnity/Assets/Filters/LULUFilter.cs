@@ -3,8 +3,6 @@ using System.Collections;
 
 public class LULUFilter
 {
-    public LULUFilter() { }
-
     private ArrayList Process(ref ArrayList vals, int n, int len)
     {
         ArrayList seqs = new ArrayList();
@@ -50,7 +48,7 @@ public class LULUFilter
     // https://en.wikipedia.org/wiki/Lulu_smoothing
     // L operator of LULU filter
     // Returns ArrayList of float[]
-    public ArrayList L(ref ArrayList vals, int n, int len)
+    public static ArrayList L(ref ArrayList vals, int n, int len)
     {
         // string valstr = "";
         // foreach (Vector3 vec in vals)
@@ -96,7 +94,7 @@ public class LULUFilter
     }
 
     // U operator of LULU filter
-    private ArrayList U(ref ArrayList vals, int n, int len)
+    public static ArrayList U(ref ArrayList vals, int n, int len)
     {
         // string valstr = "";
         // foreach (Vector3 vec in vals)
