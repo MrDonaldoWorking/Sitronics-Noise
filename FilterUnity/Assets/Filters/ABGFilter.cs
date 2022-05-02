@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections;
 
 // Original Alpha-Beta-Gamma Filter
 public class ABG // Assuming it's movement with changing accelaration
@@ -70,5 +71,34 @@ public class ABG // Assuming it's movement with changing accelaration
         currents[0] = predictions[0] + factors[0] * deviation;
         currents[1] = predictions[1] + factors[1] * deviation / time;
         currents[2] = predictions[2] + factors[2] * deviation / (0.5f * time * time);
+    }
+
+    public static float[] Predict(ArrayList vals, ArrayList time, int len)
+    {
+        ArrayList ABGs = new ArrayList();
+        // init ABG
+        for (int q = 0; q < len; ++q)
+        {
+            float[] startPos = vals[0] as float[];
+            float[] init = { startPos[q] };
+            ABGs.Add(new ABG(ref init));
+        }
+        // Prepare ABG for prediction
+        for (int i = 1; i < vals.Count; ++i)
+        {
+            for (int q = 0; q < len; ++q)
+            {
+                ABG axis = (ABG)ABGs[q];
+                axis.Update((float)time[i] - (float)time[i - 1], (vals[i] as float[])[q]);
+            }
+        }
+        // Predict next value
+        float[] predict = new float[len];
+        for (int q = 0; q < len; ++q)
+        {
+            ABG axis = (ABG)ABGs[q];
+            predict[q] = axis.GetCurrent()[0];
+        }
+        return predict;
     }
 }

@@ -98,35 +98,6 @@ public class Filter
         return new Vector3(arr[0], arr[1], arr[2]);
     }
 
-    private float[] PredictABG(ArrayList vals, ArrayList time, int len)
-    {
-        ArrayList ABGs = new ArrayList();
-        // init ABG
-        for (int q = 0; q < len; ++q)
-        {
-            float[] startPos = vals[0] as float[];
-            float[] init = { startPos[q] };
-            ABGs.Add(new ABG(ref init));
-        }
-        // Prepare ABG for prediction
-        for (int i = 1; i < vals.Count; ++i)
-        {
-            for (int q = 0; q < len; ++q)
-            {
-                ABG axis = (ABG)ABGs[q];
-                axis.Update((float)time[i] - (float)time[i - 1], (vals[i] as float[])[q]);
-            }
-        }
-        // Predict next value
-        float[] predict = new float[len];
-        for (int q = 0; q < len; ++q)
-        {
-            ABG axis = (ABG)ABGs[q];
-            predict[q] = axis.GetCurrent()[0];
-        }
-        return predict;
-    }
-
     public Vector3 FilterPosition(float time, Vector3 position, bool positionChanged)
     {
         float rawPrevTime = (float)rawPosTime[rawPosTime.Count - 1];
@@ -177,7 +148,7 @@ public class Filter
             int startIndex = Math.Max(0, filPositions.Count - WAIT);
             int elemsCnt = Math.Min(WAIT, filPositions.Count - startIndex);
             // Debug.Log($"vectorList size = {filPositions.Count}, vectTime size = {times.Count}, GetRange({startIndex}, {elemsCnt})");
-            float[] predict = PredictABG(filPositions.GetRange(startIndex, elemsCnt), filPosTime.GetRange(startIndex, elemsCnt), VEC3_N);
+            float[] predict = ABG.Predict(filPositions.GetRange(startIndex, elemsCnt), filPosTime.GetRange(startIndex, elemsCnt), VEC3_N);
             // Debug.Log($"Predicted Pos = {string.Join(",", predict)}");
             // if (!multipleFrames)
             // {
@@ -300,7 +271,7 @@ public class Filter
             int elemsCnt = Math.Min(WAIT, filAngles.Count - startIndex);
             // Neighbour differences are less in 1 than all values
             // Debug.Log($"filAngles size = {filAngles.Count}, filQuatTime size = {filQuatTime.Count}, filAngles.GetRange({startIndex}, {elemsCnt})");
-            float[] predict = PredictABG(filAngles.GetRange(startIndex, elemsCnt), filQuatTime.GetRange(startIndex + 1, elemsCnt), ANGLE_N);
+            float[] predict = ABG.Predict(filAngles.GetRange(startIndex, elemsCnt), filQuatTime.GetRange(startIndex + 1, elemsCnt), ANGLE_N);
             // Debug.Log($"Predicted Pos = {string.Join(",", predict)}");
             float predictedAngle = predict[0];
             // Assuming rotation will be as same as two previous Quaternions

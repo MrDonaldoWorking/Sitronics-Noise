@@ -11,12 +11,10 @@ public class SavGolFilter
     private readonly int minPoints = 2;
     private readonly int maxPoints = 10;
     private readonly int sidePoints;
-    private readonly int degree;
 
     public SavGolFilter(int sidePoints, int degree)
     {
         this.sidePoints = sidePoints;
-        this.degree = degree;
         ArrayList coefficients = new ArrayList();
         using (TextReader reader = File.OpenText("./SavGolC.conf"))
         {
@@ -93,22 +91,10 @@ public class SavGolFilter
                 if (Math.Abs(coefsMatrix[sidePoints, i] - flt[i]) >= 1e-5)
                 {
                     Console.WriteLine("Coefficients differ!");
-                    Console.WriteLine($"from file: {String.Join(" ", flt.Cast<float>())}");
+                    //Console.WriteLine($"from file: {String.Join(" ", flt.Cast<float>())}");
                     throw new ArgumentException("From file differs");
                 }
             }
-        }
-    }
-
-    public static void Print2DArray(float[,] matrix)
-    {
-        for (int i = 0; i < matrix.GetLength(0); i++)
-        {
-            for (int j = 0; j < matrix.GetLength(1); j++)
-            {
-                Console.Write(matrix[i, j].ToString("f7") + "\t");
-            }
-            Console.WriteLine();
         }
     }
 
