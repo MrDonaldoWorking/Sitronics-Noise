@@ -172,7 +172,7 @@ public class CameraMovementRepeater : MonoBehaviour
 
             // timer = Stopwatch.StartNew();
             transform.rotation = _filter.FilterRotation(_currentPlayedTime, transform.rotation, false);
-            // timer.Stop();
+            // timer.Stop(); 
             // long rotMillis = timer.ElapsedMillis;
             return;
         }
@@ -183,20 +183,24 @@ public class CameraMovementRepeater : MonoBehaviour
 
             Vector3 vecB = _recordedData[_lastSentFrame % _recordedData.Count].Position;
             Vector3 vecN = NoiseVec3(vecB);
+            vecNois.Add(vecN);
             Stopwatch timer = Stopwatch.StartNew();
             transform.position = _filter.FilterPosition(_currentPlayedTime, vecN, true);
             timer.Stop();
             vecTime.Add(timer.Elapsed.Milliseconds / 1000f);
             Vector3 vecA = transform.position;
+            vecFilt.Add(vecA);
             vecDist.Add(DistVec3(vecA, vecB));
 
             Quaternion quatB = _recordedData[_lastSentFrame % _recordedData.Count].Rotation;
             Quaternion quatN = NoiseQuat(quatB);
+            quatNois.Add(quatN);
             timer = Stopwatch.StartNew();
             transform.rotation = _filter.FilterRotation(_currentPlayedTime, quatN, true);
             timer.Stop();
             quatTime.Add(timer.Elapsed.Milliseconds / 1000f);
             Quaternion quatA = transform.rotation;
+            quatFilt.Add(quatA);
             quatDist.Add(DistQuat(quatA, quatB));
         }
     }
