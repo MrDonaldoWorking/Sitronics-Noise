@@ -161,7 +161,8 @@ public class Filter
             filPosTime.Add(time);
             // WAIT lag
             float[] laggedPos = filPositions[filPositions.Count - WAIT] as float[];
-            return ArrToV3(ref laggedPos);
+            //return ArrToV3(ref laggedPos);
+            return position;
         }
 
         ArrayList posWindow = rawPositions.GetRange(rawPositions.Count - CONSID_ELEMS, CONSID_ELEMS);
@@ -287,6 +288,7 @@ public class Filter
             filQuatTime.Add(time);
             // WAIT lag
             // return (Quaternion)filQuats[filQuats.Count - WAIT];
+            return rotation;
         }
 
         ArrayList fixedWindow = rawAngles.GetRange(rawAngles.Count - CONSID_ELEMS, CONSID_ELEMS);

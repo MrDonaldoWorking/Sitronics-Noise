@@ -27,6 +27,11 @@ public class CameraMovementRepeater : MonoBehaviour
     private ArrayList quatDist;
     private bool compared;
 
+    private ArrayList vecNois;
+    private ArrayList vecFilt;
+    private ArrayList quatNois;
+    private ArrayList quatFilt;
+
     void Start()
     {
         var text = DataAsset.text;
@@ -53,7 +58,13 @@ public class CameraMovementRepeater : MonoBehaviour
         quatTime = new ArrayList();
         vecDist = new ArrayList();
         quatDist = new ArrayList();
+
         compared = false;
+
+        vecNois = new ArrayList();
+        vecFilt = new ArrayList();
+        quatNois = new ArrayList();
+        quatFilt = new ArrayList();
     }
 
     private float ParseData(string s)
@@ -100,7 +111,7 @@ public class CameraMovementRepeater : MonoBehaviour
         return Vector3.Angle(forwardA, forwardB);
     }
 
-    private void WriteArrayListFloat(ArrayList times, string fileName)
+    private void WriteArrayListFloat(ref ArrayList times, string fileName)
     {
         using (StreamWriter writer = new StreamWriter(fileName))
         {
@@ -117,6 +128,20 @@ public class CameraMovementRepeater : MonoBehaviour
         }
     }
 
+    private void WriteFullInfo(ref ArrayList vec, ref ArrayList quat, string fileName)
+    {
+        using (StreamWriter writer = new StreamWriter(fileName + ".csv"))
+        {
+            writer.WriteLine("PosX,PosY,PosZ,RotX,RotY,RotZ,RotW");
+            for (int i = 0; i < vec.Count; ++i)
+            {
+                Vector3 v3 = (Vector3)vec[i];
+                Quaternion qt = (Quaternion)quat[i];
+                writer.WriteLine($"{v3.x},{v3.y},{v3.z},{qt.x},{qt.y},{qt.z},{qt.w}");
+            }
+        }
+    }
+
     void Update()
     {
         if (_lastSentFrame >= _recordedData.Count)
@@ -125,10 +150,12 @@ public class CameraMovementRepeater : MonoBehaviour
             {
                 return;
             }
-            WriteArrayListFloat(vecTime, "vecTime");
-            WriteArrayListFloat(quatTime, "quatTime");
-            WriteArrayListFloat(vecDist, "vecDist");
-            WriteArrayListFloat(quatDist, "quatDist");
+            WriteArrayListFloat(ref vecTime, "vecTime");
+            WriteArrayListFloat(ref quatTime, "quatTime");
+            WriteArrayListFloat(ref vecDist, "vecDist");
+            WriteArrayListFloat(ref quatDist, "quatDist");
+            WriteFullInfo(ref vecNois, ref quatNois, "noisedFull");
+            WriteFullInfo(ref vecFilt, ref quatNois, "filteredFull");
             compared = true;
             return;
         }
