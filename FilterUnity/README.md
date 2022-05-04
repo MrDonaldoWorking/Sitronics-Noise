@@ -42,3 +42,7 @@ For example:
 // (CONSID_ELEMS - 1 * 2 - 1 * 2) / 2 = (11 - 4) / 2 = 3
 Vector3 filtered = (Vector3) L(U(postWindow, 1), 1)[3];
 ```
+
+## Plot graphics
+
+See [8_Plots](8_Plots.ipynb)
