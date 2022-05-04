@@ -1,6 +1,8 @@
 ﻿using System;
 using System.Collections;
 
+using UnityEngine;
+
 // Original Alpha-Beta-Gamma Filter
 public class ABG // Assuming it's movement with changing accelaration
 {
@@ -73,8 +75,10 @@ public class ABG // Assuming it's movement with changing accelaration
         currents[2] = predictions[2] + factors[2] * deviation / (0.5f * time * time);
     }
 
+    // A ref or out value must be an assignable variable
     public static float[] Predict(ArrayList vals, ArrayList time, int len)
     {
+        // Debug.Log($"ABG: vals: {Util.ObjectArrsToString(ref vals, len)}, time: {Util.ObjectFloatsToString(ref time)}");
         ArrayList ABGs = new ArrayList();
         // init ABG
         for (int q = 0; q < len; ++q)

@@ -30,6 +30,7 @@ public class Filter
     private Quaternion initRot;
 
     private KolZurFilter kz;
+    private SavGolFilter sg;
 
     public void Init(Vector3 position, Quaternion rotation)
     {
@@ -49,6 +50,7 @@ public class Filter
         filQuatTime = new ArrayList { 0f };
 
         kz = new KolZurFilter(CONSID_ELEMS);
+        sg = new SavGolFilter(WAIT, 2);
 
         // clear all debug outputs
         for (int i = 0; i < VEC3_N; ++i)
@@ -222,7 +224,7 @@ public class Filter
         }
 
         ArrayList fixedWindow = rawQuats.GetRange(rawQuats.Count - CONSID_ELEMS, CONSID_ELEMS);
-        float[] filtered = kz.Filter(ref fixedWindow, 3, QUAT_N);
+        float[] filtered = sg.Filter(ref fixedWindow, QUAT_N);
         Quaternion result = Util.ArrToQuat(ref filtered);
         if (!multipleFrames)
         {

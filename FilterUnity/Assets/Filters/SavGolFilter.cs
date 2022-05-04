@@ -16,7 +16,7 @@ public class SavGolFilter
     {
         this.sidePoints = sidePoints;
         ArrayList coefficients = new ArrayList();
-        using (TextReader reader = File.OpenText("./SavGolC.conf"))
+        using (TextReader reader = File.OpenText("Assets/Filters/SavGolC.conf"))
         {
             for (int sPoints = minPoints; sPoints <= maxPoints; ++sPoints)
             {
