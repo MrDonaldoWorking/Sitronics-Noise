@@ -125,6 +125,7 @@ public class CameraMovementRepeater : MonoBehaviour
             }
             writer.WriteLine($"mean: {sum / times.Count}");
             writer.WriteLine($"max: {maxTime}");
+            writer.WriteLine($"Generated at: {DateTime.Now}");
         }
     }
 
@@ -142,6 +143,7 @@ public class CameraMovementRepeater : MonoBehaviour
                 float angle = (i == 0 ? 0f : Quaternion.Angle(prev, qt));
                 writer.WriteLine($"{v3.x},{v3.y},{v3.z},{qt.x},{qt.y},{qt.z},{qt.w},{angle}");
             }
+            // writer.WriteLine($"Generated at: {DateTime.Now}");
         }
     }
 
@@ -158,7 +160,7 @@ public class CameraMovementRepeater : MonoBehaviour
             WriteArrayListFloat(ref vecDist, "vecDist");
             WriteArrayListFloat(ref quatDist, "quatDist");
             WriteFullInfo(ref vecNois, ref quatNois, "noisedFull");
-            WriteFullInfo(ref vecFilt, ref quatNois, "filteredFull");
+            WriteFullInfo(ref vecFilt, ref quatFilt, "filteredFull");
             compared = true;
             return;
         }

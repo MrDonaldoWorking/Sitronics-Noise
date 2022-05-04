@@ -2,6 +2,7 @@
 using System.Collections;
 using System.IO;
 using UnityEngine;
+using System.Text;
 
 public class Util
 {
@@ -84,5 +85,73 @@ public class Util
                 after.Write(aft[q] + " ");
             }
         }
+    }
+
+    public static float[] QuatsToAngle(Quaternion from, Quaternion to)
+    {
+        float[] angle = { (float)Quaternion.Angle(from, to) };
+        return angle;
+    }
+
+    public static float[] QuatToArr(Quaternion quat)
+    {
+        float[] res = new float[Filter.QUAT_N];
+        for (int q = 0; q < Filter.QUAT_N; ++q)
+        {
+            res[q] = quat[q];
+        }
+        return res;
+    }
+
+    public static Quaternion ArrToQuat(ref float[] arr)
+    {
+        Quaternion quat = new Quaternion(0, 0, 0, 1);
+        for (int q = 0; q < Filter.QUAT_N; ++q)
+        {
+            quat[q] = arr[q];
+        }
+        return quat;
+    }
+
+    public static string ObjectArrToString(object element, int len)
+    {
+        StringBuilder builder = new StringBuilder("[ ");
+        float[] arr = element as float[];
+        if (element == null || arr == null)
+        {
+            builder.Append("null");
+        }
+        else
+        {
+            for (int q = 0; q < len; ++q)
+            {
+                builder.Append(((float)arr[q]).ToString("f5"));
+                builder.Append(" ");
+            }
+        }
+        builder.Append("]");
+        return builder.ToString();
+    }
+
+    public static string ObjectArrsToString(ref ArrayList elements, int len)
+    {
+        StringBuilder builder = new StringBuilder();
+        for (int i = 0; i < elements.Count; ++i)
+        {
+            builder.Append(ObjectArrToString(elements[i], len));
+            builder.Append(" ");
+        }
+        return builder.ToString();
+    }
+
+    public static string ObjectFloatsToString(ref ArrayList elements)
+    {
+        StringBuilder builder = new StringBuilder();
+        for (int i = 0; i < elements.Count; ++i)
+        {
+            builder.Append((float)elements[i]);
+            builder.Append(" ");
+        }
+        return builder.ToString();
     }
 }
