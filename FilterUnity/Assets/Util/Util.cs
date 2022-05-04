@@ -1,5 +1,7 @@
 ﻿using System;
 using System.Collections;
+using System.IO;
+using UnityEngine;
 
 public class Util
 {
@@ -29,6 +31,58 @@ public class Util
                 Console.Write(matrix[i, j].ToString("f7") + "\t");
             }
             Console.WriteLine();
+        }
+    }
+
+    public static ArrayList ToVec3ArrayList(ref ArrayList arr)
+    {
+        ArrayList result = new ArrayList();
+        int len = (arr[0] as float[]).Length;
+        // string strvec = "";
+        for (int i = 0; i < len; ++i)
+        {
+            Vector3 vec = new Vector3(0f, 0f, 0f);
+            for (int q = 0; q < Filter.VEC3_N; ++q)
+            {
+                float[] cur = arr[q] as float[];
+                vec[q] = cur[i];
+            }
+            // strvec += vec + " ";
+            result.Add(vec);
+        }
+        // Debug.Log("res: " + strvec);
+
+        return result;
+    }
+
+    public static float[] V3ToArr(Vector3 vector)
+    {
+        float[] values = new float[Filter.VEC3_N];
+        for (int q = 0; q < Filter.VEC3_N; ++q)
+        {
+            values[q] = vector[q];
+        }
+        return values;
+    }
+
+    public static Vector3 ArrToV3(ref float[] arr)
+    {
+        return new Vector3(arr[0], arr[1], arr[2]);
+    }
+
+    public static void Log2File(Vector3 bfr, Vector3 aft)
+    {
+        for (int q = 0; q < Filter.VEC3_N; ++q)
+        {
+            using (StreamWriter before = new StreamWriter("before" + q, true))
+            {
+                before.Write(bfr[q] + " ");
+            }
+
+            using (StreamWriter after = new StreamWriter("after" + q, true))
+            {
+                after.Write(aft[q] + " ");
+            }
         }
     }
 }

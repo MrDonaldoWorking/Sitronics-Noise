@@ -11,8 +11,8 @@ public class Filter
     private readonly int WAIT = 5;
     private int CONSID_ELEMS;
     // private int QUAT_N = 4;
-    private readonly int VEC3_N = 3;
-    private readonly int ANGLE_N = 1;
+    public static readonly int VEC3_N = 3;
+    public static readonly int ANGLE_N = 1;
     private readonly float EPS = 1e-5f;
 
     private int cnt = 0;
@@ -40,9 +40,9 @@ public class Filter
 
         CONSID_ELEMS = WAIT * 2 + 1;
 
-        rawPositions = new ArrayList { V3ToArr(initPos) };
+        rawPositions = new ArrayList { Util.V3ToArr(initPos) };
         rawPosTime = new ArrayList { 0f };
-        filPositions = new ArrayList { V3ToArr(initPos) };
+        filPositions = new ArrayList { Util.V3ToArr(initPos) };
         filPosTime = new ArrayList { 0f };
 
         rawQuats = new ArrayList { rotation };
@@ -62,42 +62,6 @@ public class Filter
         }
     }
 
-    private ArrayList ToVec3ArrayList(ref ArrayList arr)
-    {
-        ArrayList result = new ArrayList();
-        int len = (arr[0] as float[]).Length;
-        // string strvec = "";
-        for (int i = 0; i < len; ++i)
-        {
-            Vector3 vec = new Vector3(0f, 0f, 0f);
-            for (int q = 0; q < VEC3_N; ++q)
-            {
-                float[] cur = arr[q] as float[];
-                vec[q] = cur[i];
-            }
-            // strvec += vec + " ";
-            result.Add(vec);
-        }
-        // Debug.Log("res: " + strvec);
-
-        return result;
-    }
-
-    private float[] V3ToArr(Vector3 vector)
-    {
-        float[] values = new float[VEC3_N];
-        for (int q = 0; q < VEC3_N; ++q)
-        {
-            values[q] = vector[q];
-        }
-        return values;
-    }
-
-    private Vector3 ArrToV3(ref float[] arr)
-    {
-        return new Vector3(arr[0], arr[1], arr[2]);
-    }
-
     public Vector3 FilterPosition(float time, Vector3 position, bool positionChanged)
     {
         float rawPrevTime = (float)rawPosTime[rawPosTime.Count - 1];
@@ -108,12 +72,12 @@ public class Filter
         bool multipleFrames = Math.Abs(time - rawPrevTime) < EPS || Math.Abs(time - filPrevTime) < EPS;
         if (multipleFrames)
         {
-            rawPositions[rawPositions.Count - 1] = V3ToArr(position);
+            rawPositions[rawPositions.Count - 1] = Util.V3ToArr(position);
             rawPrevTime = rawPosTime.Count >= 2 ? (float)rawPosTime[rawPosTime.Count - 2] : 0;
         }
         else if (positionChanged)
         {
-            rawPositions.Add(V3ToArr(position));
+            rawPositions.Add(Util.V3ToArr(position));
             rawPosTime.Add(time);
             // using (StreamWriter writer = new StreamWriter("Pos_ArrayList_vals", true))
             // {
@@ -132,12 +96,12 @@ public class Filter
             // }
             if (!multipleFrames)
             {
-                filPositions.Add(V3ToArr(initPos));
+                filPositions.Add(Util.V3ToArr(initPos));
                 filPosTime.Add(time);
             }
             else
             {
-                filPositions[filPositions.Count - 1] = V3ToArr(initPos);
+                filPositions[filPositions.Count - 1] = Util.V3ToArr(initPos);
                 // time in last ArrayList element is identical
             }
             return initPos;
@@ -185,23 +149,7 @@ public class Filter
         //     }
         // }
 
-        return ArrToV3(ref filtered);
-    }
-
-    private void Log2File(Vector3 bfr, Vector3 aft)
-    {
-        for (int q = 0; q < VEC3_N; ++q)
-        {
-            using (StreamWriter before = new StreamWriter("before" + q, true))
-            {
-                before.Write(bfr[q] + " ");
-            }
-
-            using (StreamWriter after = new StreamWriter("after" + q, true))
-            {
-                after.Write(aft[q] + " ");
-            }
-        }
+        return Util.ArrToV3(ref filtered);
     }
 
     private Quaternion ExtrapolateRotation(Quaternion from, Quaternion to, float factor)
