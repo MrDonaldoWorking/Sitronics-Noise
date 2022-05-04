@@ -51,8 +51,8 @@ public class CameraMovementRepeater : MonoBehaviour
         _filter = new Filter();
         _filter.Init(transform.position, transform.rotation);
 
-        genVec = new NoiseGenerator(0f, 0f);
-        genQuat = new NoiseGenerator(0f, 0f);
+        genVec = new NoiseGenerator(0.05f, 0f);
+        genQuat = new NoiseGenerator(0.01f, 0f);
 
         vecTime = new ArrayList();
         quatTime = new ArrayList();
@@ -132,12 +132,15 @@ public class CameraMovementRepeater : MonoBehaviour
     {
         using (StreamWriter writer = new StreamWriter(fileName + ".csv"))
         {
-            writer.WriteLine("PosX,PosY,PosZ,RotX,RotY,RotZ,RotW");
+            writer.WriteLine("PosX,PosY,PosZ,RotX,RotY,RotZ,RotW,RotA");
+            // RotA - rotation angle, quaternion difference
             for (int i = 0; i < vec.Count; ++i)
             {
                 Vector3 v3 = (Vector3)vec[i];
                 Quaternion qt = (Quaternion)quat[i];
-                writer.WriteLine($"{v3.x},{v3.y},{v3.z},{qt.x},{qt.y},{qt.z},{qt.w}");
+                Quaternion prev = (i == 0 ? new Quaternion(0, 0, 0, 1) : (Quaternion)quat[i - 1]);
+                float angle = (i == 0 ? 0f : Quaternion.Angle(prev, qt));
+                writer.WriteLine($"{v3.x},{v3.y},{v3.z},{qt.x},{qt.y},{qt.z},{qt.w},{angle}");
             }
         }
     }

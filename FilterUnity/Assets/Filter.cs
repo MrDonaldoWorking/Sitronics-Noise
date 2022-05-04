@@ -181,7 +181,7 @@ public class Filter
         // Why: Machine draws 15 frames in second, but someone set 60 fps
         // Solve: delete previous data and proceed filtering
         bool multipleFrames = Math.Abs(time - rawPrevTime) < EPS || Math.Abs(time - filPrevTime) < EPS;
-        Debug.Log($"time: {rawPrevTime} -> {time} = {time - rawPrevTime}; rotationChanged = {rotationChanged}; quat: {prev.ToString("f5")} -> {rotation.ToString("f5")}");
+        // Debug.Log($"time: {rawPrevTime} -> {time} = {time - rawPrevTime}; rotationChanged = {rotationChanged}; quat: {prev.ToString("f5")} -> {rotation.ToString("f5")}");
         if (multipleFrames)
         {
             rawQuats[rawQuats.Count - 1] = rotation;
@@ -241,7 +241,7 @@ public class Filter
 
         ArrayList fixedWindow = rawAngles.GetRange(rawAngles.Count - CONSID_ELEMS, CONSID_ELEMS);
         float filteredAngle = kz.Filter(ref fixedWindow, 3, ANGLE_N)[0];
-        float angle = (rawAngles[rawAngles.Count - WAIT] as float[])[0];
+        float angle = (rawAngles[rawAngles.Count - 1 - WAIT] as float[])[0];
         float factor = Math.Abs(angle) < EPS ? 0 : filteredAngle / angle;
         // Debug.Log("Res: " + filteredAngle + " / " + angle + " = " + factor);
         Quaternion result = ExtrapolateRotation(prev, rotation, factor);
@@ -250,6 +250,7 @@ public class Filter
             filQuats.Add(result);
             filAngles.Add(QuatsToAngle(prev, result));
             filQuatTime.Add(time);
+            Debug.Log($"time: {time}: {(rawAngles[rawAngles.Count - 1 - WAIT] as float[])[0].ToString("f7")} -> {(filAngles[filAngles.Count - 1] as float[])[0].ToString("f7")}; quat: {prev.ToString("f5")} -> {rotation.ToString("f5")}");
         }
         else
         {
