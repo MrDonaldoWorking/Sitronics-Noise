@@ -22,6 +22,28 @@ public class Util
         }
     }
 
+    // K = D(|x - x*| / b)
+    public static void EpanechnikovKernel(ref ArrayList time, float b, ref float[] kernel)
+    {
+        float midTime = (float)time[time.Count / 2];
+        for (int i = 0; i < time.Count; ++i)
+        {
+            float t = Math.Abs(midTime - (float)time[i]) / b;
+            kernel[i] = Math.Abs(t) > 1 ? 0f : (3.0f / 4) * (1 - t * t);
+            // Debug.Log($"t = {t}; kernel = {Math.Abs(t)} > 1 ? {0f} : {(3 / 4) * (1 - t * t)} : {Math.Abs(t) > 1}");
+        }
+    }
+
+    public static void TricubeKernel(ref ArrayList time, float b, ref float[] kernel)
+    {
+        float midTime = (float)time[time.Count / 2];
+        for (int i = 0; i < time.Count; ++i)
+        {
+            float t = Math.Abs(midTime - (float)time[i]) / b;
+            kernel[i] = Math.Abs(t) > 1 ? 0f : (70.0f / 81) * (float)Math.Pow(1 - Math.Abs(t) * t * t, 3);
+        }
+    }
+
     // Prints 2 dimensional array
     public static void Print2DArray(float[,] matrix)
     {
