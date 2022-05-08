@@ -32,6 +32,8 @@ public class CameraMovementRepeater : MonoBehaviour
     private ArrayList quatNois;
     private ArrayList quatFilt;
 
+    private readonly string statsFileName = "allStats";
+
     void Start()
     {
         var text = DataAsset.text;
@@ -65,6 +67,26 @@ public class CameraMovementRepeater : MonoBehaviour
         vecFilt = new ArrayList();
         quatNois = new ArrayList();
         quatFilt = new ArrayList();
+
+        System.IO.File.WriteAllText(statsFileName, string.Empty);
+        // Toggle this to start new research
+        bool newResearch = true;
+        if (newResearch)
+        {
+            string[] types = { "vec", "quat" };
+            string[] researches = { "Time", "Dist" };
+            string[] results = { "mean", "max" };
+            foreach (string type in types)
+            {
+                foreach (string research in researches)
+                {
+                    foreach (string result in results)
+                    {
+                        System.IO.File.WriteAllText(type + research + result, string.Empty);
+                    }
+                }
+            }
+        }
     }
 
     private float ParseData(string s)
@@ -111,7 +133,57 @@ public class CameraMovementRepeater : MonoBehaviour
         return Vector3.Angle(forwardA, forwardB);
     }
 
-    private void WriteArrayListFloat(ref ArrayList times, string fileName)
+    // line divided by whitespaces
+    private float getMean(string line)
+    {
+        string[] vals = line.Split(' ');
+        int cnt = 0;
+        float sum = 0;
+        for (int i = 0; i < vals.Length; ++i)
+        {
+            try
+            {
+                sum += float.Parse(vals[i]);
+                ++cnt;
+            }
+            catch (FormatException e)
+            { // ignored
+                UnityEngine.Debug.LogWarning($"FormatException: {vals[i]}, message: {e.Data}");
+            }
+        }
+        return sum / cnt;
+    }
+
+    private float getMedian(string line)
+    {
+        string[] vals = line.Split(' ');
+        List<float> casted = new List<float>();
+        for (int i = 0; i < vals.Length; ++i)
+        {
+            try
+            {
+                casted.Add(float.Parse(vals[i]));
+            }
+            catch (FormatException e)
+            {
+                UnityEngine.Debug.LogWarning("FormatException");
+            }
+        }
+        casted.Sort();
+        return casted[casted.Count / 2];
+    }
+
+    private float readAndGetMean(string fileName)
+    {
+        return getMean(System.IO.File.ReadAllText(fileName));
+    }
+
+    private float readAndGetMedian(string fileName)
+    {
+        return getMedian(System.IO.File.ReadAllText(fileName));
+    }
+
+    private void WriteArrayListFloat(ref ArrayList times, string fileName, string typeName)
     {
         using (StreamWriter writer = new StreamWriter(fileName))
         {
@@ -123,9 +195,19 @@ public class CameraMovementRepeater : MonoBehaviour
                 maxTime = Math.Max(maxTime, time);
                 writer.WriteLine(time);
             }
-            writer.WriteLine($"mean: {sum / times.Count}");
-            writer.WriteLine($"max: {maxTime}");
-            writer.WriteLine($"Generated at: {DateTime.Now}");
+            using (StreamWriter all = new StreamWriter(statsFileName, true))
+            {
+                float currMean = sum / times.Count;
+                writer.WriteLine($"mean: {currMean} {typeName}");
+                System.IO.File.AppendAllText(fileName + "mean", currMean + " ");
+                writer.WriteLine($"max: {maxTime} {typeName}");
+                System.IO.File.AppendAllText(fileName + "max", maxTime + " ");
+                writer.WriteLine($"Generated at: {DateTime.Now}");
+
+                all.WriteLine(fileName);
+                all.WriteLine($"mean: {readAndGetMean(fileName + "mean").ToString("f7")} {typeName}");
+                all.WriteLine($"max: {readAndGetMedian(fileName + "max").ToString("f7")} {typeName}");
+            }
         }
     }
 
@@ -155,10 +237,10 @@ public class CameraMovementRepeater : MonoBehaviour
             {
                 return;
             }
-            WriteArrayListFloat(ref vecTime, "vecTime");
-            WriteArrayListFloat(ref quatTime, "quatTime");
-            WriteArrayListFloat(ref vecDist, "vecDist");
-            WriteArrayListFloat(ref quatDist, "quatDist");
+            WriteArrayListFloat(ref vecTime, "vecTime", "s");
+            WriteArrayListFloat(ref quatTime, "quatTime", "s");
+            WriteArrayListFloat(ref vecDist, "vecDist", "mm");
+            WriteArrayListFloat(ref quatDist, "quatDist", "deg");
             WriteFullInfo(ref vecNois, ref quatNois, "noisedFull");
             WriteFullInfo(ref vecFilt, ref quatFilt, "filteredFull");
             compared = true;

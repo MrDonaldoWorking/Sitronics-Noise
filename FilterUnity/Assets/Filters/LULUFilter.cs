@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections;
+using UnityEngine;
 
 public class LULUFilter
 {
@@ -75,6 +76,7 @@ public class LULUFilter
             // Debug.Log("mins: " + string.Join(", ", mins));
             seqs.Add(mins);
         }
+        Debug.Log($"L(size={vals.Count}, {n}, {len}): seqs size = {(seqs[0] as float[]).Length}");
 
         ArrayList arrL = new ArrayList();
         for (int q = 0; q < len; ++q)
@@ -89,8 +91,23 @@ public class LULUFilter
             // Debug.Log("curL: " + string.Join(", ", curL));
             arrL.Add(curL);
         }
+        Debug.Log($"L: arrL size = {(arrL[0] as float[]).Length}");
 
-        return arrL;
+        ArrayList res = new ArrayList();
+        int rLen = (arrL[0] as float[]).Length;
+        for (int i = 0; i < rLen; ++i)
+        {
+            float[] curr = new float[len];
+            for (int q = 0; q < len; ++q)
+            {
+                float[] val = arrL[q] as float[];
+                curr[q] = val[i];
+            }
+            res.Add(curr);
+            Debug.Log(string.Join(", ", curr));
+        }
+
+        return res;
     }
 
     // U operator of LULU filter
@@ -121,6 +138,7 @@ public class LULUFilter
             // Debug.Log("maxs: " + string.Join(", ", maxs));
             seqs.Add(maxs);
         }
+        Debug.Log($"U(size={vals.Count}, {n}, {len}): seqs size = {(seqs[0] as float[]).Length}");
 
         ArrayList arrU = new ArrayList();
         for (int q = 0; q < len; ++q)
@@ -135,7 +153,22 @@ public class LULUFilter
             // Debug.Log("curU: " + string.Join(", ", curU));
             arrU.Add(curU);
         }
+        Debug.Log($"U: arrU size = {(arrU[0] as float[]).Length}");
 
-        return arrU;
+        ArrayList res = new ArrayList();
+        int rLen = (arrU[0] as float[]).Length;
+        for (int i = 0; i < rLen; ++i)
+        {
+            float[] curr = new float[len];
+            for (int q = 0; q < len; ++q)
+            {
+                float[] val = arrU[q] as float[];
+                curr[q] = val[i];
+            }
+            res.Add(curr);
+            Debug.Log(string.Join(", ", curr));
+        }
+
+        return res;
     }
 }
