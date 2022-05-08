@@ -176,4 +176,16 @@ public class Util
         }
         return builder.ToString();
     }
+
+    // ref keyword must be applied to variables that can change
+    public static float[] ObjectArrsAt(ArrayList elements, int index)
+    {
+        float[] res = new float[elements.Count];
+        for (int i = 0; i < elements.Count; ++i)
+        {
+            float[] vals = elements[i] as float[];
+            res[i] = vals[index];
+        }
+        return res;
+    }
 }

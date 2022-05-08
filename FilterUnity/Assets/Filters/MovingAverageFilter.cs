@@ -11,7 +11,7 @@ public class MovingAverageFilter
             for (int q = 0; q < len; ++q)
             {
                 float[] curr = vals[i] as float[];
-                res[i] += curr[q];
+                res[q] += curr[q];
             }
         }
 

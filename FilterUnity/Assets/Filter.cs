@@ -128,7 +128,8 @@ public class Filter
         }
 
         ArrayList posWindow = rawPositions.GetRange(rawPositions.Count - CONSID_ELEMS, CONSID_ELEMS);
-        float[] filtered = kz.Filter(ref posWindow, 2, VEC3_N);
+        float[] filtered = MovingAverageFilter.Filter(ref rawPositions, VEC3_N);
+        Debug.Log($"filtered: {string.Join(", ", filtered)}");
         if (!multipleFrames)
         {
             filPositions.Add(filtered);
@@ -224,7 +225,7 @@ public class Filter
         }
 
         ArrayList fixedWindow = rawQuats.GetRange(rawQuats.Count - CONSID_ELEMS, CONSID_ELEMS);
-        float[] filtered = sg.Filter(ref fixedWindow, QUAT_N);
+        float[] filtered = MovingAverageFilter.Filter(ref fixedWindow, QUAT_N);
         Quaternion result = Util.ArrToQuat(ref filtered);
         if (!multipleFrames)
         {
