@@ -9,12 +9,17 @@ public class NoiseGenerator
         this.machine = new Random();
     }
 
+    private float Extend(float rnd, float bound)
+    {
+        return (2 * rnd - 1) * bound;
+    }
+
     public float Noise()
     {
-        float value = (float)machine.NextDouble() * sf;
+        float value = Extend((float)machine.NextDouble(), sf);
         if (machine.Next(50) == 0)
         {
-            value += (float)machine.NextDouble() * rf;
+            value += Extend((float)machine.NextDouble(), rf);
         }
         return value;
     }
