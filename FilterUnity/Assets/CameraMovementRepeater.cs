@@ -56,7 +56,7 @@ public class CameraMovementRepeater : MonoBehaviour
         _filter.Init(transform.position, transform.rotation);
 
         genVec = new NoiseGenerator(0.05f, 0f);
-        genQuat = new NoiseGenerator(0.01f, 0f);
+        genQuat = new NoiseGenerator(10f, 0f);
 
         vecTime = new ArrayList();
         quatTime = new ArrayList();
@@ -111,12 +111,13 @@ public class CameraMovementRepeater : MonoBehaviour
     private Quaternion NoiseQuat(Quaternion quat)
     {
         Quaternion res = new Quaternion(quat.x, quat.y, quat.z, quat.w);
-        for (int i = 0; i < 4; ++i)
+        Vector3 noiseAngle = new Vector3(0f, 0f, 0f);
+        for (int i = 0; i < 3; ++i)
         {
-            res[i] += genQuat.Noise();
+            noiseAngle[i] += genQuat.Noise();
         }
 
-        return res.normalized;
+        return res * Quaternion.Euler(noiseAngle);
     }
 
     private float DistVec3(Vector3 a, Vector3 b)
