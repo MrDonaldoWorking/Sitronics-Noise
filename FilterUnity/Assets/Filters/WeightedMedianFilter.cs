@@ -8,11 +8,35 @@ public class WeightedMedianFilter
 
     // each element of ArrayList is Vector3 with floats
     // O(n log n)
-    public static float[] Filter(ref ArrayList vals, ref ArrayList time, int len, bool lower)
+    public static float[] Gaussian(ref ArrayList vals, ref ArrayList time, int len, bool lower, float b)
     {
         float[] res = new float[len];
         float[] weights = new float[vals.Count];
-        Util.GaussianKernel(ref time, 2, ref weights);
+        Util.GaussianKernel(ref time, b, ref weights);
+        Process(ref vals, ref res, ref weights, len, lower);
+        return res;
+    }
+
+    public static float[] Epanechnikov(ref ArrayList vals, ref ArrayList time, int len, bool lower, float b)
+    {
+        float[] res = new float[len];
+        float[] weights = new float[vals.Count];
+        Util.EpanechnikovKernel(ref time, b, ref weights);
+        Process(ref vals, ref res, ref weights, len, lower);
+        return res;
+    }
+
+    public static float[] Tricube(ref ArrayList vals, ref ArrayList time, int len, bool lower, float b)
+    {
+        float[] res = new float[len];
+        float[] weights = new float[vals.Count];
+        Util.TricubeKernel(ref time, b, ref weights);
+        Process(ref vals, ref res, ref weights, len, lower);
+        return res;
+    }
+
+    private static void Process(ref ArrayList vals, ref float[] res, ref float[] weights, int len, bool lower)
+    {
         for (int q = 0; q < len; ++q)
         {
             // Function to calculate weighted median
@@ -100,7 +124,7 @@ public class WeightedMedianFilter
             }
         }
 
-        return res;
+        // return res;
     }
 }
 

@@ -188,4 +188,17 @@ public class Util
         }
         return res;
     }
+
+    public static float MeanDiff(ref ArrayList list, int dist)
+    {
+        int learn = 5;
+        int cnt = 0;
+        float sum = 0;
+        for (int i = list.Count - 1; list.Count - 1 - i < learn && i - dist >= 0; --i)
+        {
+            sum += (float)list[i] - (float)list[i - dist];
+            ++cnt;
+        }
+        return sum / cnt;
+    }
 }
