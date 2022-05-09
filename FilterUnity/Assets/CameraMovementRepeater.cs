@@ -33,6 +33,8 @@ public class CameraMovementRepeater : MonoBehaviour
     private ArrayList quatFilt;
 
     private readonly string statsFileName = "allStats";
+    private readonly string statsDirName = "stats";
+    private readonly string csvDirName = "csv";
 
     void Start()
     {
@@ -68,7 +70,7 @@ public class CameraMovementRepeater : MonoBehaviour
         quatNois = new ArrayList();
         quatFilt = new ArrayList();
 
-        System.IO.File.WriteAllText(statsFileName, string.Empty);
+        System.IO.File.WriteAllText($"{statsDirName}/{statsFileName}", string.Empty);
         // Toggle this to start new research
         bool newResearch = true;
         if (newResearch)
@@ -82,7 +84,7 @@ public class CameraMovementRepeater : MonoBehaviour
                 {
                     foreach (string result in results)
                     {
-                        System.IO.File.WriteAllText(type + research + result, string.Empty);
+                        System.IO.File.WriteAllText($"{statsDirName}/{type}{research}{result}", string.Empty);
                     }
                 }
             }
@@ -113,7 +115,8 @@ public class CameraMovementRepeater : MonoBehaviour
         {
             res[i] += genQuat.Noise();
         }
-        return res;
+
+        return res.normalized;
     }
 
     private float DistVec3(Vector3 a, Vector3 b)
@@ -166,7 +169,7 @@ public class CameraMovementRepeater : MonoBehaviour
             }
             catch (FormatException e)
             {
-                UnityEngine.Debug.LogWarning("FormatException");
+                UnityEngine.Debug.LogWarning($"FormatException: {e}");
             }
         }
         casted.Sort();
@@ -185,7 +188,11 @@ public class CameraMovementRepeater : MonoBehaviour
 
     private void WriteArrayListFloat(ref ArrayList times, string fileName, string typeName)
     {
-        using (StreamWriter writer = new StreamWriter(fileName))
+        if (!System.IO.Directory.Exists(statsDirName))
+        {
+            System.IO.Directory.CreateDirectory(statsDirName);
+        }
+        using (StreamWriter writer = new StreamWriter($"{statsDirName}/{fileName}"))
         {
             times.RemoveAt(times.Count - 1);
             float sum = 0, maxTime = 0;
@@ -195,25 +202,31 @@ public class CameraMovementRepeater : MonoBehaviour
                 maxTime = Math.Max(maxTime, time);
                 writer.WriteLine(time);
             }
-            using (StreamWriter all = new StreamWriter(statsFileName, true))
+            using (StreamWriter all = new StreamWriter($"{statsDirName}/{statsFileName}", true))
             {
                 float currMean = sum / times.Count;
                 writer.WriteLine($"mean: {currMean} {typeName}");
-                System.IO.File.AppendAllText(fileName + "mean", currMean + " ");
+                string meanPath = $"{statsDirName}/{fileName}mean";
+                string maxPath = $"{statsDirName}/{fileName}max";
+                System.IO.File.AppendAllText(meanPath, currMean + " ");
                 writer.WriteLine($"max: {maxTime} {typeName}");
-                System.IO.File.AppendAllText(fileName + "max", maxTime + " ");
+                System.IO.File.AppendAllText(maxPath, maxTime + " ");
                 writer.WriteLine($"Generated at: {DateTime.Now}");
 
                 all.WriteLine(fileName);
-                all.WriteLine($"mean: {readAndGetMean(fileName + "mean").ToString("f7")} {typeName}");
-                all.WriteLine($"max: {readAndGetMedian(fileName + "max").ToString("f7")} {typeName}");
+                all.WriteLine($"mean: {readAndGetMean(meanPath).ToString("f7")} {typeName}");
+                all.WriteLine($"max: {readAndGetMedian(maxPath).ToString("f7")} {typeName}");
             }
         }
     }
 
     private void WriteFullInfo(ref ArrayList vec, ref ArrayList quat, string fileName)
     {
-        using (StreamWriter writer = new StreamWriter(fileName + ".csv"))
+        if (!System.IO.Directory.Exists(csvDirName))
+        {
+            System.IO.Directory.CreateDirectory(csvDirName);
+        }
+        using (StreamWriter writer = new StreamWriter($"{csvDirName}/{fileName}.csv"))
         {
             writer.WriteLine("PosX,PosY,PosZ,RotX,RotY,RotZ,RotW,RotA");
             // RotA - rotation angle, quaternion difference
@@ -288,7 +301,7 @@ public class CameraMovementRepeater : MonoBehaviour
             quatTime.Add(timer.Elapsed.Milliseconds / 1000f);
             Quaternion quatA = transform.rotation;
             quatFilt.Add(quatA);
-            quatDist.Add(DistQuat(quatA, quatB));
+            quatDist.Add(DistQuat(quatA.normalized, quatB.normalized));
         }
     }
 }
