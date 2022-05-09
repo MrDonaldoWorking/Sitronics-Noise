@@ -198,9 +198,10 @@ public class CameraMovementRepeater : MonoBehaviour
             float sum = 0, maxTime = 0;
             foreach (float time in times)
             {
-                sum += time;
-                maxTime = Math.Max(maxTime, time);
-                writer.WriteLine(time);
+                float curTime = typeName == "mm" ? time * 1000 : time;
+                sum += curTime;
+                maxTime = Math.Max(maxTime, curTime);
+                writer.WriteLine(curTime);
             }
             using (StreamWriter all = new StreamWriter($"{statsDirName}/{statsFileName}", true))
             {
