@@ -24,6 +24,16 @@ public class NoiseGenerator
         return value;
     }
 
+    public float GetSF()
+    {
+        return sf;
+    }
+
+    public float GetRF()
+    {
+        return rf;
+    }
+
     private readonly float sf;
     private readonly float rf;
     private readonly Random machine;

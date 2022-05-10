@@ -29,12 +29,21 @@ public class CameraMovementRepeater : MonoBehaviour
 
     private ArrayList vecNois;
     private ArrayList vecFilt;
+    private ArrayList vecReal;
     private ArrayList quatNois;
     private ArrayList quatFilt;
+    private ArrayList quatReal;
+    private ArrayList times;
 
     private readonly string statsFileName = "allStats";
     private readonly string statsDirName = "stats";
     private readonly string csvDirName = "csv";
+
+    private KolZurFilter kz;
+    private SavGolFilter sg;
+    private ArrayList qnDiff;
+    private static readonly int WAIT = 5;
+    private static readonly int CONSID_ELEMS = WAIT * 2 + 1;
 
     void Start()
     {
@@ -56,7 +65,7 @@ public class CameraMovementRepeater : MonoBehaviour
         _filter.Init(transform.position, transform.rotation);
 
         genVec = new NoiseGenerator(0.05f, 0f);
-        genQuat = new NoiseGenerator(10f, 0f);
+        genQuat = new NoiseGenerator(3f, 0f);
 
         vecTime = new ArrayList();
         quatTime = new ArrayList();
@@ -67,8 +76,15 @@ public class CameraMovementRepeater : MonoBehaviour
 
         vecNois = new ArrayList();
         vecFilt = new ArrayList();
+        vecReal = new ArrayList();
         quatNois = new ArrayList();
         quatFilt = new ArrayList();
+        quatReal = new ArrayList();
+        times = new ArrayList();
+
+        kz = new KolZurFilter(WAIT: WAIT);
+        sg = new SavGolFilter(sidePoints: WAIT, degree: 1);
+        qnDiff = new ArrayList();
 
         System.IO.File.WriteAllText($"{statsDirName}/{statsFileName}", string.Empty);
         // Toggle this to start new research
@@ -268,12 +284,12 @@ public class CameraMovementRepeater : MonoBehaviour
         if (currentFrame == _lastSentFrame)
         {
             // Stopwatch timer = Stopwatch.StartNew();
-            transform.position = _filter.FilterPosition(_currentPlayedTime, transform.position, false);
+            // transform.position = _filter.FilterPosition(_currentPlayedTime, transform.position, false);
             // timer.Stop();
             // long posMillis = timer.ElapsedMillis;
 
             // timer = Stopwatch.StartNew();
-            transform.rotation = _filter.FilterRotation(_currentPlayedTime, transform.rotation, false);
+            // transform.rotation = _filter.FilterRotation(_currentPlayedTime, transform.rotation, false);
             // timer.Stop(); 
             // long rotMillis = timer.ElapsedMillis;
             return;
@@ -283,7 +299,9 @@ public class CameraMovementRepeater : MonoBehaviour
         {
             _lastSentFrame++;
 
+            times.Add(_currentPlayedTime);
             Vector3 vecB = _recordedData[_lastSentFrame % _recordedData.Count].Position;
+            vecReal.Add(vecB);
             Vector3 vecN = NoiseVec3(vecB);
             vecNois.Add(vecN);
             Stopwatch timer = Stopwatch.StartNew();
@@ -292,18 +310,42 @@ public class CameraMovementRepeater : MonoBehaviour
             vecTime.Add(timer.Elapsed.Milliseconds / 1000f);
             Vector3 vecA = transform.position;
             vecFilt.Add(vecA);
-            vecDist.Add(DistVec3(vecA, vecB));
+            if (vecNois.Count >= CONSID_ELEMS)
+            {
+                vecDist.Add(DistVec3(vecA, (Vector3)vecReal[vecReal.Count - WAIT - 1]));
+            }
 
             Quaternion quatB = _recordedData[_lastSentFrame % _recordedData.Count].Rotation;
+            quatReal.Add(quatB);
             Quaternion quatN = NoiseQuat(quatB);
             quatNois.Add(quatN);
             timer = Stopwatch.StartNew();
             transform.rotation = _filter.FilterRotation(_currentPlayedTime, quatN, true);
+            /** Experimental Code
+            qnDiff.Add(quatNois.Count <= 1 ? Filter.QuatsToAngle(_recordedData.First().Rotation, quatN) : Filter.QuatsToAngle((Quaternion)quatNois[quatNois.Count - 2], quatN));
+            if (qnDiff.Count < CONSID_ELEMS)
+            {
+                // transform.rotation = _recordedData.First().Rotation;
+            }
+            else
+            {
+                ArrayList angleWindow = qnDiff.GetRange(qnDiff.Count - CONSID_ELEMS, CONSID_ELEMS);
+                ArrayList timeWindow = times.GetRange(times.Count - CONSID_ELEMS, CONSID_ELEMS);
+                float filAngle = KernelFilter.Gaussian(ref angleWindow, ref timeWindow, Util.MeanDiff(ref times, 3), Filter.ANGLE_N)[0];
+                float rawAngle = (qnDiff[qnDiff.Count - WAIT - 1] as float[])[0];
+                UnityEngine.Debug.Log($"time: {_currentPlayedTime}, Angles: {Util.ObjectArrsToString(ref angleWindow, Filter.ANGLE_N)}");
+                UnityEngine.Debug.Log($"res: {filAngle}; / {rawAngle} = {filAngle / rawAngle}");
+                // transform.rotation = Filter.ExtrapolateRotation((Quaternion)quatNois[quatNois.Count - WAIT - 2], (Quaternion)quatNois[quatNois.Count - WAIT - 1], filAngle / rawAngle);
+                UnityEngine.Debug.Log($"was: {Quaternion.Angle((Quaternion)quatNois[quatNois.Count - WAIT - 2], (Quaternion)quatNois[quatNois.Count - WAIT - 1])}, now: {Quaternion.Angle((Quaternion)quatFilt[quatFilt.Count - WAIT - 2], transform.rotation)}");
+            } */
             timer.Stop();
             quatTime.Add(timer.Elapsed.Milliseconds / 1000f);
             Quaternion quatA = transform.rotation;
             quatFilt.Add(quatA);
-            quatDist.Add(DistQuat(quatA.normalized, quatB.normalized));
+            if (quatNois.Count >= CONSID_ELEMS)
+            {
+                quatDist.Add(DistQuat(quatA.normalized, ((Quaternion)quatReal[quatReal.Count - WAIT - 1]).normalized));
+            }
         }
     }
 }
