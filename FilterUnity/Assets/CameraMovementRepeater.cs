@@ -38,12 +38,10 @@ public class CameraMovementRepeater : MonoBehaviour
     private readonly string statsFileName = "allStats";
     private readonly string statsDirName = "stats";
     private readonly string csvDirName = "csv";
+    private readonly string bestDirName = "best";
+    private string algoName;
 
-    private KolZurFilter kz;
-    private SavGolFilter sg;
     private ArrayList qnDiff;
-    private static readonly int WAIT = 5;
-    private static readonly int CONSID_ELEMS = WAIT * 2 + 1;
 
     void Start()
     {
@@ -82,13 +80,12 @@ public class CameraMovementRepeater : MonoBehaviour
         quatReal = new ArrayList();
         times = new ArrayList();
 
-        kz = new KolZurFilter(WAIT: WAIT);
-        sg = new SavGolFilter(sidePoints: WAIT, degree: 1);
         qnDiff = new ArrayList();
 
         System.IO.File.WriteAllText($"{statsDirName}/{statsFileName}", string.Empty);
         // Toggle this to start new research
-        bool newResearch = true;
+        algoName = "Kernel Gauss neig=4 Wait=7";
+        bool newResearch = false;
         if (newResearch)
         {
             string[] types = { "vec", "quat" };
@@ -190,7 +187,7 @@ public class CameraMovementRepeater : MonoBehaviour
             }
         }
         casted.Sort();
-        return casted[casted.Count / 2];
+        return casted[0];
     }
 
     private float readAndGetMean(string fileName)
@@ -203,12 +200,17 @@ public class CameraMovementRepeater : MonoBehaviour
         return getMedian(System.IO.File.ReadAllText(fileName));
     }
 
+    private void CreateDirIfNotExists(string name)
+    {
+        if (!System.IO.Directory.Exists(name))
+        {
+            System.IO.Directory.CreateDirectory(name);
+        }
+    }
+
     private void WriteArrayListFloat(ref ArrayList times, string fileName, string typeName)
     {
-        if (!System.IO.Directory.Exists(statsDirName))
-        {
-            System.IO.Directory.CreateDirectory(statsDirName);
-        }
+        CreateDirIfNotExists(statsDirName);
         using (StreamWriter writer = new StreamWriter($"{statsDirName}/{fileName}"))
         {
             times.RemoveAt(times.Count - 1);
@@ -240,10 +242,7 @@ public class CameraMovementRepeater : MonoBehaviour
 
     private void WriteFullInfo(ref ArrayList vec, ref ArrayList quat, string fileName)
     {
-        if (!System.IO.Directory.Exists(csvDirName))
-        {
-            System.IO.Directory.CreateDirectory(csvDirName);
-        }
+        CreateDirIfNotExists(csvDirName);
         using (StreamWriter writer = new StreamWriter($"{csvDirName}/{fileName}.csv"))
         {
             writer.WriteLine("PosX,PosY,PosZ,RotX,RotY,RotZ,RotW,RotA");
@@ -260,6 +259,81 @@ public class CameraMovementRepeater : MonoBehaviour
         }
     }
 
+    public class Stats
+    {
+        public float mean { get; set; }
+        public float max { get; set; }
+        public string algo { get; set; }
+    }
+
+    private void CollectResults()
+    {
+        string[] lines = System.IO.File.ReadAllLines($"{statsDirName}/{statsFileName}");
+        // time, vec, quat; mean, max
+        float[,] results = new float[3, 2];
+        for (int j = 0; j < 2; ++j)
+        {
+            results[0, j] = float.Parse(lines[1 + j].Split(' ')[1]) + float.Parse(lines[4 + j].Split(' ')[1]);
+        }
+        for (int i = 1; i < 3; ++i)
+        {
+            for (int j = 0; j < 2; ++j)
+            {
+                results[i, j] = float.Parse(lines[7 + (i - 1) * 3 + j].Split(' ')[1]);
+            }
+        }
+        Stats[] curr = new Stats[3];
+        for (int q = 0; q < 3; ++q)
+        {
+            UnityEngine.Debug.LogWarning($"stats[{q}]: {results[q, 0]}; {results[q, 1]}");
+            curr[q] = new Stats();
+            curr[q].mean = results[q, 0];
+            curr[q].max = results[q, 1];
+            curr[q].algo = algoName;
+            UnityEngine.Debug.Log($"{curr[q].algo}: {curr[q].mean}; {curr[q].max}");
+        }
+
+        CreateDirIfNotExists(bestDirName);
+        string[] types = { "Time", "Vec", "Quat" };
+        string[] measures = { "ms", "mm", "deg" };
+        for (int q = 0; q < 3; ++q)
+        {
+            string currBestPath = $"{bestDirName}/best{types[q]}";
+            string[] bests = System.IO.File.Exists(currBestPath) ? System.IO.File.ReadAllLines(currBestPath) : new string[0];
+            List<Stats> statList = new List<Stats>();
+            foreach (string line in bests)
+            {
+                Stats stat = new Stats();
+                // <Algo name>: <mean> <measure>; <max> <measure>
+                string[] statStr = line.Split(':')[1].Split(';');
+                stat.mean = float.Parse(statStr[0].Split(' ')[1]);
+                stat.max = float.Parse(statStr[1].Split(' ')[1]);
+                stat.algo = line.Split(':')[0];
+                if (stat.algo == algoName)
+                {
+                    if (stat.mean < curr[q].mean)
+                    {
+                        curr[q] = stat;
+                    }
+                }
+                else
+                {
+                    statList.Add(stat);
+                }
+            }
+            statList.Add(curr[q]);
+            statList.Sort(delegate (Stats a, Stats b) { return a.mean.CompareTo(b.mean); });
+
+            using (StreamWriter writer = new StreamWriter(currBestPath))
+            {
+                foreach (Stats stat in statList)
+                {
+                    writer.WriteLine($"{stat.algo}: {stat.mean} {measures[q]}; {stat.max} {measures[q]}");
+                }
+            }
+        }
+    }
+
     void Update()
     {
         if (_lastSentFrame >= _recordedData.Count)
@@ -268,12 +342,13 @@ public class CameraMovementRepeater : MonoBehaviour
             {
                 return;
             }
-            WriteArrayListFloat(ref vecTime, "vecTime", "s");
-            WriteArrayListFloat(ref quatTime, "quatTime", "s");
+            WriteArrayListFloat(ref vecTime, "vecTime", "ms");
+            WriteArrayListFloat(ref quatTime, "quatTime", "ms");
             WriteArrayListFloat(ref vecDist, "vecDist", "mm");
             WriteArrayListFloat(ref quatDist, "quatDist", "deg");
             WriteFullInfo(ref vecNois, ref quatNois, "noisedFull");
             WriteFullInfo(ref vecFilt, ref quatFilt, "filteredFull");
+            CollectResults();
             compared = true;
             return;
         }
@@ -307,12 +382,13 @@ public class CameraMovementRepeater : MonoBehaviour
             Stopwatch timer = Stopwatch.StartNew();
             transform.position = _filter.FilterPosition(_currentPlayedTime, vecN, true);
             timer.Stop();
-            vecTime.Add(timer.Elapsed.Milliseconds / 1000f);
+            // Accroding to https://docs.microsoft.com/en-us/dotnet/api/system.diagnostics.stopwatch.elapsed?view=net-6.0
+            vecTime.Add(timer.Elapsed.Milliseconds / 10f);
             Vector3 vecA = transform.position;
             vecFilt.Add(vecA);
-            if (vecNois.Count >= CONSID_ELEMS)
+            if (vecNois.Count >= _filter.CONSID_ELEMS)
             {
-                vecDist.Add(DistVec3(vecA, (Vector3)vecReal[vecReal.Count - WAIT - 1]));
+                vecDist.Add(DistVec3(vecA, (Vector3)vecReal[vecReal.Count - 1 - _filter.WAIT]));
             }
 
             Quaternion quatB = _recordedData[_lastSentFrame % _recordedData.Count].Rotation;
@@ -339,12 +415,12 @@ public class CameraMovementRepeater : MonoBehaviour
                 UnityEngine.Debug.Log($"was: {Quaternion.Angle((Quaternion)quatNois[quatNois.Count - WAIT - 2], (Quaternion)quatNois[quatNois.Count - WAIT - 1])}, now: {Quaternion.Angle((Quaternion)quatFilt[quatFilt.Count - WAIT - 2], transform.rotation)}");
             } */
             timer.Stop();
-            quatTime.Add(timer.Elapsed.Milliseconds / 1000f);
+            quatTime.Add(timer.Elapsed.Milliseconds / 10f);
             Quaternion quatA = transform.rotation;
             quatFilt.Add(quatA);
-            if (quatNois.Count >= CONSID_ELEMS)
+            if (quatNois.Count >= _filter.CONSID_ELEMS)
             {
-                quatDist.Add(DistQuat(quatA.normalized, ((Quaternion)quatReal[quatReal.Count - WAIT - 1]).normalized));
+                quatDist.Add(DistQuat(quatA.normalized, ((Quaternion)quatReal[quatReal.Count - 1 - _filter.WAIT]).normalized));
             }
         }
     }
