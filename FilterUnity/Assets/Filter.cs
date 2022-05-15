@@ -8,8 +8,8 @@ using System.Text;
 
 public class Filter
 {
-    private readonly int WAIT = 5;
-    private int CONSID_ELEMS;
+    public readonly int WAIT = 7;
+    public int CONSID_ELEMS;
     public static readonly int QUAT_N = 4;
     public static readonly int VEC3_N = 3;
     public static readonly int ANGLE_N = 1;
@@ -25,8 +25,10 @@ public class Filter
 
     private ArrayList rawQuats;
     private ArrayList rawQuatTime;
+    private ArrayList rawAngles;
     private ArrayList filQuats;
     private ArrayList filQuatTime;
+    private ArrayList filAngles;
     private Quaternion initRot;
 
     private KolZurFilter kz;
@@ -46,10 +48,12 @@ public class Filter
 
         rawQuats = new ArrayList { Util.QuatToArr(rotation) };
         rawQuatTime = new ArrayList { 0f };
+        rawAngles = new ArrayList();
         filQuats = new ArrayList { Util.QuatToArr(rotation) };
         filQuatTime = new ArrayList { 0f };
+        filAngles = new ArrayList();
 
-        kz = new KolZurFilter(CONSID_ELEMS);
+        kz = new KolZurFilter(WAIT);
         sg = new SavGolFilter(WAIT, 2);
 
         // clear all debug outputs
@@ -128,8 +132,13 @@ public class Filter
         }
 
         ArrayList posWindow = rawPositions.GetRange(rawPositions.Count - CONSID_ELEMS, CONSID_ELEMS);
-        float[] filtered = MovingAverageFilter.Filter(ref rawPositions, VEC3_N);
-        Debug.Log($"filtered: {string.Join(", ", filtered)}");
+        ArrayList timeWindow = rawPosTime.GetRange(rawPosTime.Count - CONSID_ELEMS, CONSID_ELEMS);
+        float[] filtered = posWindow[WAIT] as float[];
+        if (Util.IsDefect(ref rawPositions, ref rawPosTime, ref filPositions, ref filPosTime, VEC3_N, WAIT))
+        {
+            filtered = WeightedMedianFilter.Gaussian(ref posWindow, ref timeWindow, VEC3_N, true, Util.MeanDiff(ref rawPosTime, 6));
+        }
+        // Debug.Log($"filtered: {string.Join(", ", filtered)}");
         if (!multipleFrames)
         {
             filPositions.Add(filtered);
@@ -167,6 +176,7 @@ public class Filter
 
     public Quaternion FilterRotation(float time, Quaternion rotation, bool rotationChanged)
     {
+        System.IO.File.AppendAllText("timer", $"{time}\n");
         float rawPrevTime = (float)rawQuatTime[rawQuatTime.Count - 1];
         float filPrevTime = (float)filQuatTime[filQuatTime.Count - 1];
         float[] prevRawArrQuat = rawQuats[rawQuats.Count - 1] as float[];
@@ -182,11 +192,13 @@ public class Filter
             rawPrevTime = rawQuatTime.Count >= 2 ? (float)rawQuatTime[rawQuatTime.Count - 2] : 0;
             prevRawArrQuat = rawQuats.Count >= 2 ? rawQuats[rawQuats.Count - 2] as float[] : Util.QuatToArr(initRot);
             prev = Util.ArrToQuat(ref prevRawArrQuat);
+            rawAngles[rawAngles.Count - 1] = Util.QuatsToAngle(prev, rotation);
         }
         else if (rotationChanged)
         {
             rawQuats.Add(Util.QuatToArr(rotation));
             rawQuatTime.Add(time);
+            rawAngles.Add(Util.QuatsToAngle(prev, rotation));
         }
         if (rawQuats.Count < CONSID_ELEMS)
         {
@@ -201,6 +213,8 @@ public class Filter
                 filQuats[filQuats.Count - 1] = Util.QuatToArr(initRot);
                 // time is identical to last element
             }
+            // Obviously 0
+            filAngles.Add(new float[] { 0f });
             return initRot;
         }
 
@@ -225,22 +239,38 @@ public class Filter
         }
 
         ArrayList fixedWindow = rawQuats.GetRange(rawQuats.Count - CONSID_ELEMS, CONSID_ELEMS);
+        ArrayList timeWindow = rawQuatTime.GetRange(rawQuatTime.Count - CONSID_ELEMS, CONSID_ELEMS);
         // Filtered result is older that current, difference is WAIT elements
         // Example: WAIT = 2, filtering c when current is e
         // raw: _abcdefg
         // fil: _____CDE
-        float[] filtered = MovingAverageFilter.Filter(ref fixedWindow, QUAT_N);
+        // compare with angles velocity
+        float[] filtered = fixedWindow[WAIT] as float[];
+
+        // bool pickled = Util.IsPickled(ref rawQuats, ref rawQuatTime, ref filQuats, ref filQuatTime, QUAT_N, WAIT);
+        // if (pickled)
+        // {
+        //     System.IO.File.AppendAllText("defect", $"!{rawQuatTime.Count}[{0}] <- pickled\n");
+        // }
+        bool pickled = false;
+        if (pickled || Util.IsDefect(ref rawAngles, ref rawQuatTime, ref filAngles, ref filQuatTime, ANGLE_N, WAIT) || pickled)
+        {
+            filtered = WeightedMedianFilter.Gaussian(ref fixedWindow, ref timeWindow, QUAT_N, true, Util.MeanDiff(ref rawQuatTime, 6));
+        }
         Quaternion result = Util.ArrToQuat(ref filtered);
+        float[] filPrev = filQuats[filQuats.Count - 2] as float[];
         if (!multipleFrames)
         {
             filQuats.Add(filtered);
             filQuatTime.Add(time);
             Debug.Log($"time: {time}: {rotation.ToString("f5")} -> {result.ToString("f5")}");
+            filAngles.Add(Util.QuatsToAngle(ref filPrev, ref filtered, true));
         }
         else
         {
             filQuats[filQuats.Count - 1] = filtered;
             // time is identical to last element in ArrayList
+            filAngles[filAngles.Count - 1] = Util.QuatsToAngle(ref filPrev, ref filtered, true);
         }
         return result;
     }

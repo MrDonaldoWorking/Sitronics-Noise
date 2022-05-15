@@ -62,8 +62,8 @@ public class CameraMovementRepeater : MonoBehaviour
         _filter = new Filter();
         _filter.Init(transform.position, transform.rotation);
 
-        genVec = new NoiseGenerator(0.05f, 0f);
-        genQuat = new NoiseGenerator(3f, 0f);
+        genVec = new NoiseGenerator(0f, 0.9f, 100);
+        genQuat = new NoiseGenerator(0f, 10f, 100);
 
         vecTime = new ArrayList();
         quatTime = new ArrayList();
@@ -83,9 +83,11 @@ public class CameraMovementRepeater : MonoBehaviour
         qnDiff = new ArrayList();
 
         System.IO.File.WriteAllText($"{statsDirName}/{statsFileName}", string.Empty);
+        System.IO.File.WriteAllText("defect", string.Empty);
+        System.IO.File.WriteAllText("sysdefect", string.Empty);
         // Toggle this to start new research
-        algoName = "Kernel Gauss neig=4 Wait=7";
-        bool newResearch = false;
+        algoName = "WMedian Gauss neig=6 Wait=7";
+        bool newResearch = true;
         if (newResearch)
         {
             string[] types = { "vec", "quat" };
@@ -111,26 +113,34 @@ public class CameraMovementRepeater : MonoBehaviour
         return float.Parse(filteredData, CultureInfo.InvariantCulture);
     }
 
-    private Vector3 NoiseVec3(Vector3 vec)
+    private Vector3 NoiseVec3(Vector3 vec, int ind)
     {
         Vector3 res = new Vector3(vec.x, vec.y, vec.z);
         for (int i = 0; i < 3; ++i)
         {
             res[i] += genVec.Noise();
+            if (genVec.GetHappened())
+            {
+                System.IO.File.AppendAllText("sysdefect", $"{ind}\n");
+            }
         }
         return res;
     }
 
-    private Quaternion NoiseQuat(Quaternion quat)
+    private Quaternion NoiseQuat(Quaternion quat, int ind)
     {
         Quaternion res = new Quaternion(quat.x, quat.y, quat.z, quat.w);
         Vector3 noiseAngle = new Vector3(0f, 0f, 0f);
         for (int i = 0; i < 3; ++i)
         {
             noiseAngle[i] += genQuat.Noise();
+            if (genQuat.GetHappened())
+            {
+                System.IO.File.AppendAllText("sysdefect", $"{ind}\n");
+            }
         }
 
-        return res * Quaternion.Euler(noiseAngle);
+        return Quaternion.Normalize(res * Quaternion.Euler(noiseAngle));
     }
 
     private float DistVec3(Vector3 a, Vector3 b)
@@ -334,6 +344,18 @@ public class CameraMovementRepeater : MonoBehaviour
         }
     }
 
+    private void WriteErrorsInfo()
+    {
+        using (StreamWriter writer = new StreamWriter($"{csvDirName}/errors.csv"))
+        {
+            writer.WriteLine("Pos,Rot");
+            for (int i = 0; i < vecDist.Count; ++i)
+            {
+                writer.WriteLine($"{vecDist[i]},{quatDist[i]}");
+            }
+        }
+    }
+
     void Update()
     {
         if (_lastSentFrame >= _recordedData.Count)
@@ -348,6 +370,7 @@ public class CameraMovementRepeater : MonoBehaviour
             WriteArrayListFloat(ref quatDist, "quatDist", "deg");
             WriteFullInfo(ref vecNois, ref quatNois, "noisedFull");
             WriteFullInfo(ref vecFilt, ref quatFilt, "filteredFull");
+            WriteErrorsInfo();
             CollectResults();
             compared = true;
             return;
@@ -377,7 +400,7 @@ public class CameraMovementRepeater : MonoBehaviour
             times.Add(_currentPlayedTime);
             Vector3 vecB = _recordedData[_lastSentFrame % _recordedData.Count].Position;
             vecReal.Add(vecB);
-            Vector3 vecN = NoiseVec3(vecB);
+            Vector3 vecN = NoiseVec3(vecB, vecReal.Count);
             vecNois.Add(vecN);
             Stopwatch timer = Stopwatch.StartNew();
             transform.position = _filter.FilterPosition(_currentPlayedTime, vecN, true);
@@ -393,7 +416,7 @@ public class CameraMovementRepeater : MonoBehaviour
 
             Quaternion quatB = _recordedData[_lastSentFrame % _recordedData.Count].Rotation;
             quatReal.Add(quatB);
-            Quaternion quatN = NoiseQuat(quatB);
+            Quaternion quatN = NoiseQuat(quatB, quatReal.Count);
             quatNois.Add(quatN);
             timer = Stopwatch.StartNew();
             transform.rotation = _filter.FilterRotation(_currentPlayedTime, quatN, true);
