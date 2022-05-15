@@ -8,8 +8,8 @@ using System.Text;
 
 public class Filter
 {
-    private readonly int WAIT = 5;
-    private int CONSID_ELEMS;
+    public readonly int WAIT = 5;
+    public int CONSID_ELEMS;
     public static readonly int QUAT_N = 4;
     public static readonly int VEC3_N = 3;
     public static readonly int ANGLE_N = 1;
