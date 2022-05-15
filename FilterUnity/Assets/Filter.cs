@@ -8,8 +8,8 @@ using System.Text;
 
 public class Filter
 {
-    public readonly int WAIT = 7;
-    public int CONSID_ELEMS;
+    private readonly int WAIT = 5;
+    private int CONSID_ELEMS;
     public static readonly int QUAT_N = 4;
     public static readonly int VEC3_N = 3;
     public static readonly int ANGLE_N = 1;
@@ -25,9 +25,9 @@ public class Filter
 
     private ArrayList rawQuats;
     private ArrayList rawQuatTime;
-    private ArrayList rawAngles;
     private ArrayList filQuats;
     private ArrayList filQuatTime;
+    private ArrayList rawAngles;
     private ArrayList filAngles;
     private Quaternion initRot;
 
@@ -46,15 +46,15 @@ public class Filter
         filPositions = new ArrayList { Util.V3ToArr(initPos) };
         filPosTime = new ArrayList { 0f };
 
-        rawQuats = new ArrayList { Util.QuatToArr(rotation) };
+        rawQuats = new ArrayList { rotation };
         rawQuatTime = new ArrayList { 0f };
-        rawAngles = new ArrayList();
-        filQuats = new ArrayList { Util.QuatToArr(rotation) };
+        filQuats = new ArrayList { rotation };
         filQuatTime = new ArrayList { 0f };
+        rawAngles = new ArrayList();
         filAngles = new ArrayList();
 
         kz = new KolZurFilter(WAIT);
-        sg = new SavGolFilter(WAIT, 2);
+        sg = new SavGolFilter(WAIT, 1);
 
         // clear all debug outputs
         for (int i = 0; i < VEC3_N; ++i)
@@ -132,13 +132,7 @@ public class Filter
         }
 
         ArrayList posWindow = rawPositions.GetRange(rawPositions.Count - CONSID_ELEMS, CONSID_ELEMS);
-        ArrayList timeWindow = rawPosTime.GetRange(rawPosTime.Count - CONSID_ELEMS, CONSID_ELEMS);
-        float[] filtered = posWindow[WAIT] as float[];
-        if (Util.IsDefect(ref rawPositions, ref rawPosTime, ref filPositions, ref filPosTime, VEC3_N, WAIT))
-        {
-            filtered = WeightedMedianFilter.Gaussian(ref posWindow, ref timeWindow, VEC3_N, true, Util.MeanDiff(ref rawPosTime, 6));
-        }
-        // Debug.Log($"filtered: {string.Join(", ", filtered)}");
+        float[] filtered = kz.Filter(ref posWindow, 2, VEC3_N);
         if (!multipleFrames)
         {
             filPositions.Add(filtered);
@@ -160,7 +154,7 @@ public class Filter
         return Util.ArrToV3(ref filtered);
     }
 
-    private Quaternion ExtrapolateRotation(Quaternion from, Quaternion to, float factor)
+    public static Quaternion ExtrapolateRotation(Quaternion from, Quaternion to, float factor)
     {
         Quaternion rot = to * Quaternion.Inverse(from); // rot is the rotation from from to to
         float ang;
@@ -174,103 +168,105 @@ public class Filter
         return Quaternion.AngleAxis(ang, axis) * from; // combine with first rotation
     }
 
+    public static float[] QuatsToAngle(Quaternion from, Quaternion to)
+    {
+        float[] angle = { (float)Quaternion.Angle(from, to) };
+        return angle;
+    }
+
     public Quaternion FilterRotation(float time, Quaternion rotation, bool rotationChanged)
     {
-        System.IO.File.AppendAllText("timer", $"{time}\n");
         float rawPrevTime = (float)rawQuatTime[rawQuatTime.Count - 1];
         float filPrevTime = (float)filQuatTime[filQuatTime.Count - 1];
-        float[] prevRawArrQuat = rawQuats[rawQuats.Count - 1] as float[];
-        Quaternion prev = Util.ArrToQuat(ref prevRawArrQuat);
+        Quaternion prev = (Quaternion)rawQuats[rawQuats.Count - 1];
         // Issue with sending multiple positions in one frame
         // Why: Machine draws 15 frames in second, but someone set 60 fps
         // Solve: delete previous data and proceed filtering
         bool multipleFrames = Math.Abs(time - rawPrevTime) < EPS || Math.Abs(time - filPrevTime) < EPS;
         // Debug.Log($"time: {rawPrevTime} -> {time} = {time - rawPrevTime}; rotationChanged = {rotationChanged}; quat: {prev.ToString("f5")} -> {rotation.ToString("f5")}");
+        // Debug.Log($"time: {time}, rotationChanged={rotationChanged}; multiple={multipleFrames}");
         if (multipleFrames)
         {
-            rawQuats[rawQuats.Count - 1] = Util.QuatToArr(rotation);
+            rawQuats[rawQuats.Count - 1] = rotation;
             rawPrevTime = rawQuatTime.Count >= 2 ? (float)rawQuatTime[rawQuatTime.Count - 2] : 0;
-            prevRawArrQuat = rawQuats.Count >= 2 ? rawQuats[rawQuats.Count - 2] as float[] : Util.QuatToArr(initRot);
-            prev = Util.ArrToQuat(ref prevRawArrQuat);
-            rawAngles[rawAngles.Count - 1] = Util.QuatsToAngle(prev, rotation);
+            prev = rawQuats.Count >= 2 ? (Quaternion)rawQuats[rawQuats.Count - 2] : initRot;
+            rawAngles[rawAngles.Count - 1] = QuatsToAngle(prev, rotation);
+            // Debug.Log($"mul raw {Util.ObjectArrsToString(ref rawAngles, ANGLE_N)}");
         }
         else if (rotationChanged)
         {
-            rawQuats.Add(Util.QuatToArr(rotation));
+            rawQuats.Add(rotation);
             rawQuatTime.Add(time);
-            rawAngles.Add(Util.QuatsToAngle(prev, rotation));
+            rawAngles.Add(QuatsToAngle(prev, rotation));
+            // Debug.Log($"raw {Util.ObjectArrsToString(ref rawAngles, ANGLE_N)}");
         }
-        if (rawQuats.Count < CONSID_ELEMS)
+        if (rawAngles.Count < CONSID_ELEMS)
         {
             if (!multipleFrames)
             {
-                filQuats.Add(Util.QuatToArr(initRot));
+                filQuats.Add(initRot);
+                filAngles.Add(QuatsToAngle(initRot, initRot));
                 filQuatTime.Add(time);
+                // Debug.Log($"fil {Util.ObjectArrsToString(ref filAngles, ANGLE_N)}");
             }
             else
             {
-                // filQuats.Count > 0 guaranteed because of Init
-                filQuats[filQuats.Count - 1] = Util.QuatToArr(initRot);
+                filQuats[filQuats.Count - 1] = initRot;
+                // filAngles.Count > 0 guaranteed
+                filAngles[filAngles.Count - 1] = QuatsToAngle(initRot, initRot);
                 // time is identical to last element
+                // Debug.Log($"mul fil {Util.ObjectArrsToString(ref filAngles, ANGLE_N)}");
             }
-            // Obviously 0
-            filAngles.Add(new float[] { 0f });
             return initRot;
         }
 
         // Lost connection
         if (!rotationChanged)
         {
-            int startIndex = Math.Max(0, filQuats.Count - WAIT);
-            int elemsCnt = Math.Min(WAIT, filQuats.Count - startIndex);
+            int startIndex = Math.Max(0, filAngles.Count - WAIT);
+            int elemsCnt = Math.Min(WAIT, filAngles.Count - startIndex);
             // Neighbour differences are less in 1 than all values
             // Debug.Log($"filAngles size = {filAngles.Count}, filQuatTime size = {filQuatTime.Count}, filAngles.GetRange({startIndex}, {elemsCnt})");
-            float[] predict = ABG.Predict(filQuats.GetRange(startIndex, elemsCnt), filQuatTime.GetRange(startIndex, elemsCnt), QUAT_N);
+            float[] predict = ABG.Predict(filAngles.GetRange(startIndex, elemsCnt), filQuatTime.GetRange(startIndex + 1, elemsCnt), ANGLE_N);
             // Debug.Log($"Predicted Pos = {string.Join(",", predict)}");
-            Quaternion predictQuat = Util.ArrToQuat(ref predict);
+            float predictedAngle = predict[0];
+            // Assuming rotation will be as same as two previous Quaternions
+            Quaternion filPrev2 = (Quaternion)filQuats[filQuats.Count - 2];
+            Quaternion filPrev = (Quaternion)filQuats[filQuats.Count - 1];
+            float prevAngle = (filAngles[filAngles.Count - 1] as float[])[0];
+            // predictedAngle = prevAngle * (time - (float)filQuatTime[filQuatTime.Count - 1]) / ((float)filQuatTime[filQuatTime.Count - 1] - (float)filQuatTime[filQuatTime.Count - 2]);
+            float predictFactor = Math.Abs(prevAngle) < EPS ? 1 : (prevAngle + predictedAngle) / prevAngle;
+            Quaternion predictQuat = ExtrapolateRotation(filPrev2, filPrev, predictFactor);
             // Debug.Log($"angle: {predictedAngle}, {prevAngle} = {predictFactor}; quats: {filPrev2.ToString("f5")} -> {filPrev.ToString("f5")} -> {predictQuat.ToString("f5")}");
-            filQuats.Add(predict);
+            filQuats.Add(predictQuat);
+            filAngles.Add(predict);
             filQuatTime.Add(time);
             // WAIT lag
-            // TODO
-            // float[] lagged = (filQuats[filQuats.Count - 1 - WAIT] as float[]);
-            // return Util.ArrToQuat(ref lagged);
+            // return (Quaternion)filQuats[filQuats.Count - WAIT];
             return rotation;
         }
 
-        ArrayList fixedWindow = rawQuats.GetRange(rawQuats.Count - CONSID_ELEMS, CONSID_ELEMS);
-        ArrayList timeWindow = rawQuatTime.GetRange(rawQuatTime.Count - CONSID_ELEMS, CONSID_ELEMS);
-        // Filtered result is older that current, difference is WAIT elements
-        // Example: WAIT = 2, filtering c when current is e
-        // raw: _abcdefg
-        // fil: _____CDE
-        // compare with angles velocity
-        float[] filtered = fixedWindow[WAIT] as float[];
-
-        // bool pickled = Util.IsPickled(ref rawQuats, ref rawQuatTime, ref filQuats, ref filQuatTime, QUAT_N, WAIT);
-        // if (pickled)
-        // {
-        //     System.IO.File.AppendAllText("defect", $"!{rawQuatTime.Count}[{0}] <- pickled\n");
-        // }
-        bool pickled = false;
-        if (pickled || Util.IsDefect(ref rawAngles, ref rawQuatTime, ref filAngles, ref filQuatTime, ANGLE_N, WAIT) || pickled)
-        {
-            filtered = WeightedMedianFilter.Gaussian(ref fixedWindow, ref timeWindow, QUAT_N, true, Util.MeanDiff(ref rawQuatTime, 6));
-        }
-        Quaternion result = Util.ArrToQuat(ref filtered);
-        float[] filPrev = filQuats[filQuats.Count - 2] as float[];
+        ArrayList fixedWindow = rawAngles.GetRange(rawAngles.Count - CONSID_ELEMS, CONSID_ELEMS);
+        float filteredAngle = sg.Filter(ref fixedWindow, ANGLE_N)[0];
+        float angle = (rawAngles[rawAngles.Count - 1 - WAIT] as float[])[0];
+        float factor = Math.Abs(angle) < EPS ? 0 : filteredAngle / angle;
+        // Debug.Log("Res: " + filteredAngle + " / " + angle + " = " + factor);
+        Quaternion result = ExtrapolateRotation((Quaternion)rawQuats[rawQuats.Count - WAIT - 2], (Quaternion)rawQuats[rawQuats.Count - WAIT - 1], factor);
         if (!multipleFrames)
         {
-            filQuats.Add(filtered);
+            filQuats.Add(result);
+            filAngles.Add(filteredAngle);
             filQuatTime.Add(time);
-            Debug.Log($"time: {time}: {rotation.ToString("f5")} -> {result.ToString("f5")}");
-            filAngles.Add(Util.QuatsToAngle(ref filPrev, ref filtered, true));
+            // Debug.Log($"fil {Util.ObjectArrsToString(ref filAngles, ANGLE_N)}");
+            // Debug.Log($"raws: {Util.ObjectArrsToString(ref fixedWindow, ANGLE_N)}");
+            // Debug.Log($"time: {time}: {(rawAngles[rawAngles.Count - 1 - WAIT] as float[])[0].ToString("f7")} -> {(filAngles[filAngles.Count - 1 - WAIT] as float[])[0].ToString("f7")}");
         }
         else
         {
-            filQuats[filQuats.Count - 1] = filtered;
+            filQuats[filQuats.Count - 1] = result;
+            filAngles[filAngles.Count - 1] = filteredAngle;
+            // Debug.Log($"mul fil {Util.ObjectArrsToString(ref filAngles, ANGLE_N)}");
             // time is identical to last element in ArrayList
-            filAngles[filAngles.Count - 1] = Util.QuatsToAngle(ref filPrev, ref filtered, true);
         }
         return result;
     }

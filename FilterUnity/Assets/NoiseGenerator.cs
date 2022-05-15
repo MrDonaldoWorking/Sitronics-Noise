@@ -2,10 +2,11 @@ using System;
 
 public class NoiseGenerator
 {
-    public NoiseGenerator(float staticFluctuation, float randomFluctuation)
+    public NoiseGenerator(float staticFluctuation, float randomFluctuation, int ticks)
     {
         this.sf = staticFluctuation;
         this.rf = randomFluctuation;
+        this.ticks = ticks;
         this.machine = new Random();
     }
 
@@ -17,9 +18,14 @@ public class NoiseGenerator
     public float Noise()
     {
         float value = Extend((float)machine.NextDouble(), sf);
-        if (machine.Next(50) == 0)
+        if (machine.Next(ticks) == 0)
         {
             value += Extend((float)machine.NextDouble(), rf);
+            happened = true;
+        }
+        else
+        {
+            happened = false;
         }
         return value;
     }
@@ -34,7 +40,19 @@ public class NoiseGenerator
         return rf;
     }
 
+    public int GetTicks()
+    {
+        return ticks;
+    }
+
+    public bool GetHappened()
+    {
+        return happened;
+    }
+
     private readonly float sf;
     private readonly float rf;
+    private readonly int ticks;
+    private bool happened = false;
     private readonly Random machine;
 }

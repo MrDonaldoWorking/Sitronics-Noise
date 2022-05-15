@@ -115,6 +115,13 @@ public class Util
         return angle;
     }
 
+    public static float[] QuatsToAngle(ref float[] from, ref float[] to, bool t)
+    {
+        Quaternion fq = ArrToQuat(ref from);
+        Quaternion tq = ArrToQuat(ref to);
+        return QuatsToAngle(fq, tq);
+    }
+
     public static float[] QuatToArr(Quaternion quat)
     {
         float[] res = new float[Filter.QUAT_N];
@@ -200,5 +207,77 @@ public class Util
             ++cnt;
         }
         return sum / cnt;
+    }
+
+    public static float MeanVelocity(ref ArrayList vals, ref ArrayList times, int len, int ind)
+    {
+        // Debug.Log($"MeanVelocity: {ObjectArrsToString(ref vals, len)}; {Util.ObjectFloatsToString(ref times)}");
+        float[] final = vals[vals.Count - 1] as float[];
+        float[] first = vals[0] as float[];
+        return (final[ind] - first[ind]) / ((float)times[vals.Count - 1] - (float)times[0]);
+        // for (int i = 1; i < vals.Count; ++i)
+        // {
+        //     float[] curr = vals[i - 1] as float[];
+        //     float[] next = vals[i] as float[];
+        //     sum += (next[ind] - curr[ind]) / ((float)times[i] - (float)times[i - 1]);
+        // }
+        // return sum / (vals.Count - 1);
+    }
+
+    public static float Distance(ref float[] x, ref float[] y, int len)
+    {
+        float res = 0;
+        for (int q = 0; q < len; ++q)
+        {
+            res += (float)Math.Pow(x[q] - y[q], 2);
+        }
+        return (float)Math.Sqrt(res);
+    }
+
+    public static bool IsPickled(ref ArrayList raws, ref ArrayList rawTimes, ref ArrayList fils, ref ArrayList filTimes, int len, int WAIT)
+    {
+        ArrayList filPrevs = fils.GetRange(fils.Count - WAIT, WAIT);
+        ArrayList filPrTimes = filTimes.GetRange(filTimes.Count - WAIT, WAIT);
+        float[] prevRaw = raws[raws.Count - 1 - WAIT - 1] as float[];
+        float[] currRaw = raws[raws.Count - 1 - WAIT] as float[];
+        for (int q = 0; q < len; ++q)
+        {
+            float currV = (currRaw[q] - prevRaw[q]) / ((float)rawTimes[rawTimes.Count - 1 - WAIT] - (float)rawTimes[rawTimes.Count - 1 - WAIT - 1]);
+            float prevV = Util.MeanVelocity(ref filPrevs, ref filPrTimes, len, q);
+            System.IO.File.AppendAllText("defect", $"{raws.Count}[{q}]: dist={Distance(ref prevRaw, ref currRaw, len)} {(len == Filter.VEC3_N ? "m" : "deg")}; factor={currV / prevV}; currV={currV}, prevV={prevV}\n");
+            if (Math.Abs(currV) > Math.Abs(prevV) * 2/* && Math.Abs(prevV) > float.Epsilon*/)
+            {
+                System.IO.File.AppendAllText("defect", $"!{rawTimes.Count}[{q}]\n");
+                return true;
+            }
+        }
+        return false;
+    }
+
+    public static bool IsDefect(ref ArrayList raws, ref ArrayList rawTimes, ref ArrayList fils, ref ArrayList filTimes, int len, int WAIT)
+    {
+        // raws contains WAIT elements more than fils
+        // fils doesn't contain current filtered element
+        ArrayList filPrevs = fils.GetRange(fils.Count - WAIT, WAIT);
+        ArrayList filPrTimes = filTimes.GetRange(filTimes.Count - WAIT, WAIT);
+        float[] prevRaw = raws[raws.Count - 1 - WAIT - 1] as float[];
+        float[] currRaw = raws[raws.Count - 1 - WAIT] as float[];
+        float[] prevFil = filPrevs[filPrevs.Count - 1] as float[];
+        float[] firstFil = filPrevs[0] as float[];
+        if (Distance(ref prevRaw, ref currRaw, len) > 2 * Distance(ref prevFil, ref firstFil, len))
+        {
+            for (int q = 0; q < len; ++q)
+            {
+                float currV = (currRaw[q] - prevRaw[q]) / ((float)rawTimes[rawTimes.Count - 1 - WAIT] - (float)rawTimes[rawTimes.Count - 1 - WAIT - 1]);
+                float prevV = Util.MeanVelocity(ref filPrevs, ref filPrTimes, len, q);
+                System.IO.File.AppendAllText("defect", $"{raws.Count}[{q}]: dist={Distance(ref prevRaw, ref currRaw, len)} {(len == Filter.VEC3_N ? "m" : "deg")}; factor={currV / prevV}; currV={currV}, prevV={prevV}\n");
+                if (Math.Abs(currV) > Math.Abs(prevV) * 2/* && Math.Abs(prevV) > float.Epsilon*/ && Distance(ref prevRaw, ref currRaw, len) > 2 * Distance(ref prevFil, ref firstFil, len))
+                {
+                    System.IO.File.AppendAllText("defect", $"!{rawTimes.Count}[{q}]\n");
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 }
